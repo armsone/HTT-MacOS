@@ -7,7 +7,8 @@ struct InputMateSettingsView: View {
     @EnvironmentObject private var appInputLanguageStore: AppInputLanguageStore
     @ObservedObject private var coordinator = InputMateCoordinator.shared
 
-    @State private var selectedTab = 0
+    /// 메인 사이드바의 "입력 도우미" 하위 메뉴에서 고른 페이지.
+    let page: InputMatePage
 
     var body: some View {
         if coordinator.migrationFailed {
@@ -17,22 +18,15 @@ struct InputMateSettingsView: View {
                 if let message = appState.transientMessage {
                     warningBanner(message)
                 }
-                TabView(selection: $selectedTab) {
+                switch page {
+                case .appLanguage:
                     AppInputLanguageSettingsView()
-                        .tabItem { Label("앱별 입력 언어", systemImage: "globe") }
-                        .tag(0)
-
+                case .koreanTypo:
                     koreanTypoSettings
-                        .tabItem { Label("한글 교정 및 번역", systemImage: "character.textbox") }
-                        .tag(1)
-
+                case .trackpad:
                     trackpadSettings
-                        .tabItem { Label("트랙패드", systemImage: "hand.raised") }
-                        .tag(2)
-
+                case .general:
                     generalAndAboutSettings
-                        .tabItem { Label("일반 / 정보", systemImage: "gearshape") }
-                        .tag(3)
                 }
             }
             .padding(16)

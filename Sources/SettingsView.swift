@@ -45,6 +45,40 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
     static let supportSections: [SettingsSection] = [.help, .general]
 }
 
+/// 입력 도우미의 하위 메뉴. 사이드바의 "입력 도우미" 아래에 펼쳐지고, 선택한 페이지가 같은 상세 영역에 나타난다.
+public enum InputMatePage: Int, CaseIterable, Identifiable {
+    case appLanguage
+    case koreanTypo
+    case trackpad
+    case general
+
+    public var id: Int { rawValue }
+
+    public var title: String {
+        switch self {
+        case .appLanguage: return "앱별 입력 언어"
+        case .koreanTypo: return "한글 교정 및 번역"
+        case .trackpad: return "트랙패드"
+        case .general: return "일반·정보"
+        }
+    }
+
+    public var symbolName: String {
+        switch self {
+        case .appLanguage: return "globe"
+        case .koreanTypo: return "character.textbox"
+        case .trackpad: return "hand.raised"
+        case .general: return "gearshape"
+        }
+    }
+}
+
+/// 사이드바 목록의 선택 값: 최상위 섹션 또는 입력 도우미 하위 페이지.
+private enum SidebarItem: Hashable {
+    case section(SettingsSection)
+    case inputPage(InputMatePage)
+}
+
 /// Mac 관리 섹션 안에서 바로 전환하는 두 구간(별도 창 없이 같은 상세 영역을 바꾼다).
 public enum MacManagementSegment: String, CaseIterable, Identifiable {
     case status
@@ -67,6 +101,8 @@ public final class SettingsSectionStore: ObservableObject {
 
     @Published public var section: SettingsSection = .home {
         didSet {
+            // 홈·안내·메뉴 어디서 입력 도우미를 열어도 사이드바 하위 메뉴가 펼쳐져 선택한 페이지가 보인다.
+            if section == .input { inputGroupExpanded = true }
             // 사용자가 다른 섹션으로 이동하면 열려 있던 브라우저 화면은 배너로 접고, 돌아가기로 다시 볼 수 있다.
             if section != oldValue {
                 showsHostedBrowser = false
@@ -79,6 +115,9 @@ public final class SettingsSectionStore: ObservableObject {
     /// 창이 처음 만들어지기 전의 요청도 보존하며, 시트를 닫으면 바인딩이 다시 false로 바뀐다.
     @Published public var showLanguagePackSheet = false
     @Published public var macSegment: MacManagementSegment = .status
+    /// 입력 도우미 하위 페이지. 다른 섹션으로 갔다 돌아와도 유지된다.
+    @Published public var inputPage: InputMatePage = .appLanguage
+    @Published public var inputGroupExpanded = false
     /// 메인 창 안에 올린 AI·웹 번역·로그인 브라우저 화면(여러 개면 마지막이 대표).
     @Published var hostedBrowsers: [AIBIBrowserWindow] = []
     @Published var showsHostedBrowser = false
@@ -89,6 +128,7 @@ public final class SettingsSectionStore: ObservableObject {
 
     public init(section: SettingsSection = .home) {
         self.section = section
+        self.inputGroupExpanded = (section == .input)
     }
 }
 
@@ -126,12 +166,32 @@ public struct SettingsView: View {
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
-            List(selection: Binding(
-                get: { store.section },
-                set: { if let newSection = $0 { select(newSection) } }
+            List(selection: Binding<SidebarItem?>(
+                get: {
+                    // 펼쳐진 입력 도우미에서는 하위 항목만 선택 표시되어 부모·자식이 동시에 선택돼 보이지 않는다.
+                    if store.section == .input && store.inputGroupExpanded { return .inputPage(store.inputPage) }
+                    return .section(store.section)
+                },
+                set: { newItem in
+                    switch newItem {
+                    case .section(let section):
+                        select(section)
+                    case .inputPage(let page):
+                        store.inputPage = page
+                        select(.input)
+                    case nil:
+                        break
+                    }
+                }
             )) {
                 Section {
-                    ForEach(SettingsSection.taskSections) { sidebarRow($0) }
+                    ForEach(SettingsSection.taskSections) { section in
+                        if section == .input {
+                            inputGroupRow
+                        } else {
+                            sidebarRow(section)
+                        }
+                    }
                 }
                 Section {
                     ForEach(SettingsSection.supportSections) { sidebarRow($0) }
@@ -163,7 +223,31 @@ public struct SettingsView: View {
         } icon: {
             HTTIconView(id: section.iconId, size: 18)
         }
-        .tag(section)
+        .tag(SidebarItem.section(section))
+    }
+
+    /// 입력 도우미: 라벨을 누르면 열리며 펼치고, 공개 삼각형으로 접을 수 있다. 하위 4개 페이지가 바로 아래에 보인다.
+    private var inputGroupRow: some View {
+        DisclosureGroup(isExpanded: $store.inputGroupExpanded) {
+            ForEach(InputMatePage.allCases) { page in
+                Label(page.title, systemImage: page.symbolName)
+                    .font(.body)
+                    .tag(SidebarItem.inputPage(page))
+            }
+        } label: {
+            Label {
+                Text(SettingsSection.input.title)
+                    .font(.body)
+            } icon: {
+                HTTIconView(id: SettingsSection.input.iconId, size: 18)
+            }
+            .tag(SidebarItem.section(.input))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                store.inputGroupExpanded = true
+                select(.input)
+            }
+        }
     }
 
     /// 사이드바 선택: Mac 관리는 표시 직전에 충돌 상태를 새로 확인한다(별도 창 없음).
@@ -257,7 +341,7 @@ public struct SettingsView: View {
         case .browser:
             BrowserSetupView(settingsStore: store)
         case .input:
-            InputMateSettingsView()
+            InputMateSettingsView(page: store.inputPage)
         case .macManagement:
             MacManagementPane(store: store)
         case .help:
