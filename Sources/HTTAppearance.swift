@@ -320,6 +320,8 @@ public struct HTTIconView: View {
             switch id {
             case "home": return "house.fill"
             case "browser": return "globe"
+            case "mail": return "envelope.fill"
+            case "screen": return "text.viewfinder"
             case "edit": return "pencil"
             case "device_files": return "internaldrive.fill"
             case "settings": return "gearshape.fill"

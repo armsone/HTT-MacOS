@@ -57,6 +57,30 @@ public final class PersonalDictionaryStore: ObservableObject {
         persist()
     }
 
+    public enum SaveResult {
+        case saved, unchanged, invalid, duplicate, unavailable
+    }
+
+    // 사용자가 사전 화면에서 직접 추가·수정한다. original이 nil이면 새 항목, 아니면 그 항목을 수정(원래 단어 변경 포함)한다.
+    // 검사를 모두 통과한 뒤에만 한 번에 바꾸므로 잘못된 입력·중복이면 기존 항목은 그대로다. 다른 항목은 덮어쓰지 않는다.
+    public func save(original: String?, source: String, replacement: String) -> SaveResult {
+        let key = Self.cleaned(source)
+        let value = Self.cleaned(replacement)
+        guard Self.isValid(source: key, replacement: value), Self.isSingleWord(key) else { return .invalid }
+        guard !InputMateMigration.migrationFailed else { return .unavailable }
+        if key != original, entries[key] != nil { return .duplicate }
+        var updated = entries
+        if let original, original != key { updated[original] = nil }
+        updated[key] = value
+        guard updated != entries else { return .unchanged }
+        entries = updated
+        persist()
+        return .saved
+    }
+
+    // 이전 데이터 확인에 실패한 동안에는 저장되지 않으므로 화면에서 추가·수정·삭제를 막는 데 쓴다.
+    public var canEdit: Bool { !InputMateMigration.migrationFailed }
+
     public func remove(source: String) {
         guard entries[source] != nil else { return }
         entries[source] = nil
@@ -76,6 +100,11 @@ public final class PersonalDictionaryStore: ObservableObject {
 
     private static func cleaned(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // 변환은 커서 바로 앞의 한 단어(공백 없음, 32 UTF-16 단위 이하)에만 적용되므로 그 밖의 원래 단어는 받지 않는다.
+    private static func isSingleWord(_ text: String) -> Bool {
+        text.rangeOfCharacter(from: .whitespacesAndNewlines) == nil && text.utf16.count <= 32
     }
 
     private static func isValid(source: String, replacement: String) -> Bool {

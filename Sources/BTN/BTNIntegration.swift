@@ -478,7 +478,6 @@ private final class NotificationObserverBag: @unchecked Sendable {
 @MainActor
 public final class BTNIntegration: ObservableObject {
     public static let shared = BTNIntegration()
-    public static let detailWindowTitle = "HTT — Mac 관리"
 
     @Published public var isManagementEnabled: Bool {
         didSet {
@@ -521,7 +520,6 @@ public final class BTNIntegration: ObservableObject {
     @Published public private(set) var isRuntimeActive = false
 
     let model: MonitorViewModel
-    private(set) var detailWindow: NSWindow?
 
     private let migrationConfiguration: BTNMigrationConfiguration
     private let httDefaults: UserDefaults
@@ -674,45 +672,9 @@ public final class BTNIntegration: ObservableObject {
         syncModelConfiguration()
     }
 
-    /// 기존 `DetailView(model:)`를 담는 단일 재사용 `NSWindow`(`HTT — Mac 관리`)를 연다.
-    public func showDetailWindow() {
+    /// Mac 관리 화면이 HTT 메인 창 안에 나타날 때 호출한다. 별도 창을 만들지 않고 충돌 상태만 최신으로 맞춘다.
+    public func prepareForDisplay() {
         _ = refreshStandaloneConflictState()
-        _ = NSApplication.shared
-
-        let window: NSWindow
-        if let existingWindow = detailWindow {
-            window = existingWindow
-        } else {
-            let hostingController = NSHostingController(rootView: DetailView(model: model))
-            let createdWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 720, height: 640),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            createdWindow.contentViewController = hostingController
-            createdWindow.title = Self.detailWindowTitle
-            createdWindow.minSize = NSSize(width: 580, height: 480)
-            createdWindow.isReleasedWhenClosed = false
-            createdWindow.center()
-            createdWindow.setFrameAutosaveName("HTT.BTN.DetailWindow")
-            self.detailWindow = createdWindow
-            window = createdWindow
-        }
-
-        window.title = Self.detailWindowTitle
-        if window.isMiniaturized {
-            window.deminiaturize(nil)
-        }
-        window.makeKeyAndOrderFront(nil)
-
-        if NSApp != nil {
-            if #available(macOS 14.0, *) {
-                NSApplication.shared.activate()
-            } else {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-            }
-        }
     }
 
     public nonisolated static func isStandaloneBTNRunning(excludingTerminatedPID: pid_t? = nil) -> Bool {

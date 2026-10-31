@@ -42,12 +42,11 @@ public struct HTTGuideView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 HTTIconView(id: "help", size: 28)
-                Text("HTT 사용 방법")
+                Text("사용 방법")
                     .font(.title2.bold())
                 Spacer()
-                HTTThemeButton()
             }
-            Text("작업별 핵심 단계와 단축키, 안전 수칙을 확인하고 원하는 기능으로 바로 이동하세요.")
+            Text("모든 기능은 이 창 하나에서 사이드바로 이동합니다. 작업별 핵심 단계와 단축키, 안전 수칙을 확인하고 해당 섹션으로 바로 이동하세요.")
                 .font(.callout)
                 .foregroundStyle(palette.text2)
         }
@@ -62,8 +61,11 @@ public struct HTTGuideView: View {
             badge: "기본 안내"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("HTT는 화면 번역, 메일 번역, 브라우저 번역, 입력 도우미(InputMate), Mac 관리(BTN)를 하나의 앱으로 결합한 통합 작업 공간입니다.")
+                Text("HTT는 화면 번역, 메일·이미지 번역, 브라우저 번역, 입력 도우미(InputMate), Mac 관리(BTN)를 하나의 앱으로 결합한 통합 작업 공간입니다.")
                     .font(.body)
+
+                Text("• 하나의 창: 홈·메일/이미지 번역·화면 번역·브라우저 번역·입력 도우미·Mac 관리·사용 방법·앱 설정이 모두 이 창의 사이드바 섹션입니다. 메뉴나 단축키로 열어도 새 창이 겹쳐 뜨지 않고 같은 창에서 해당 섹션으로 이동합니다. 다른 섹션으로 이동해도 진행 중인 메일 번역은 유지됩니다.")
+                Text("• 예외: 화면 번역 캡처 영역, 시스템 파일 선택·권한·확인 대화상자, 업데이트 확인 창은 시스템 표준 방식으로 잠시 따로 나타납니다.")
 
                 Text("• 원하는 기능만 선택: 각 모듈은 완전히 독립된 스위치를 가지므로 불필요한 기능은 끈 채 필요한 기능만 켜서 가볍게 사용할 수 있습니다.")
                 Text("• 기존 데이터 보존: 통합 시 기존 앱의 설정·개인 사전·Mac 관리 기록 원본을 보존하며, HTT에 이미 저장된 설정값이 있으면 그 값을 우선합니다.")
@@ -72,7 +74,7 @@ public struct HTTGuideView: View {
                     Button("홈 화면 보기") {
                         settingsStore.section = .home
                     }
-                    Button("앱 설정 열기…") {
+                    Button("앱 설정 열기") {
                         settingsStore.section = .general
                     }
                 }
@@ -110,19 +112,21 @@ public struct HTTGuideView: View {
     private var screenTranslationSection: some View {
         guideCard(
             iconId: "browser",
-            title: "화면 번역 — 선택 영역 번역 및 화면 번역 창 열기",
+            title: "화면 번역 — 캡처 모드로 선택 영역 번역",
             badge: "전역 단축키 ⌃⌥⇧⌘T"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("1. 화면 번역 창 열기: 전역 단축키 ⌃⌥⇧⌘T는 어느 앱에서든 화면 번역 창을 항상 표시하며, HTT 앱 활성 시에는 ⌘0으로도 열 수 있습니다 (메뉴 막대에서는 열기/숨기기 토글 가능). 반투명 창을 화면에 띄우고 번역하려는 글자 위에 테두리를 맞춥니다.")
-                Text("2. 선택 영역 번역 (Return / Enter 또는 주 버튼): 창 안의 글자를 인식하고, 원문 줄 위치에 정확히 겹쳐 번역문을 표시합니다.")
-                Text("3. 원문보기 (Space 키): 번역 완료 후 Space를 누르면 번역 패치가 숨겨져 창 아래 실제 화면과 즉시 비교할 수 있습니다.")
+                Text("• 캡처 모드: 화면 번역은 다른 앱 위에 투명한 캡처 영역을 띄우는 방식이라 이 창과 함께 보일 수 없습니다. 시작하면 이 창이 잠시 숨겨지고, 영역의 닫기 버튼이나 Esc로 끝내면 같은 창으로 돌아옵니다. 다른 앱에서 단축키로 시작했다면 끝낸 뒤 이 창을 자동으로 열지 않습니다.")
+                Text("• 캡처 중 로그인·수동 진행·웹 번역 화면이 필요하면 캡처 영역만 잠시 내려가고(진행 중인 번역은 유지) 이 창에 해당 화면이 나타납니다. 모두 닫히면 다른 섹션으로 이동하지 않은 경우 캡처 모드로 돌아옵니다. 다른 섹션으로 이동하거나 취소·창 닫기를 하면 진행 중인 화면 번역은 취소됩니다.")
+                Text("1. 캡처 모드 시작: 전역 단축키 ⌃⌥⇧⌘T는 어느 앱에서든 캡처 영역을 표시하며, HTT 앱 활성 시에는 ⌘0으로도 시작할 수 있습니다 (메뉴 막대에서는 시작/끝내기 토글 가능). 번역하려는 글자 위에 테두리를 맞춥니다.")
+                Text("2. 선택 영역 번역 (Return / Enter 또는 주 버튼): 영역 안의 글자를 인식하고, 원문 줄 위치에 정확히 겹쳐 번역문을 표시합니다.")
+                Text("3. 원문보기 (Space 키): 번역 완료 후 Space를 누르면 번역 패치가 숨겨져 아래 실제 화면과 즉시 비교할 수 있습니다.")
 
                 HStack(spacing: 12) {
-                    Button("화면 번역 창 열기") {
-                        (NSApp.delegate as? AppDelegate)?.showOverlay()
+                    Button("화면 번역 캡처 시작") {
+                        MailWindowCoordinator.shared.startCaptureModeFromWorkbench()
                     }
-                    Button("브라우저 번역 설정…") {
+                    Button("브라우저 번역 보기") {
                         settingsStore.section = .browser
                     }
                 }
@@ -136,20 +140,21 @@ public struct HTTGuideView: View {
     private var mailTranslationSection: some View {
         guideCard(
             iconId: "browser",
-            title: "메일 번역 — Mail에서 선택한 메일 번역 vs 메일 번역 창 열기",
+            title: "메일·이미지 번역 — Mail에서 선택한 메일 번역 vs 파일 열기",
             badge: "단축키 ⌃⌥⇧⌘M"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("• Mail에서 선택한 메일 번역: 전역 단축키 ⌃⌥⇧⌘M은 어느 앱에서든 Mail의 선택 메시지를 즉시 번역하며, HTT 앱 활성 시에는 ⇧⌘T로도 실행할 수 있습니다. Apple Mail에서 선택한 메일의 서식·표·이미지를 그대로 보존하며 번역 창에 결과를 보여줍니다.")
-                Text("• 메일 번역 창 열기: 독립된 메일 번역 창을 열어 이메일 파일(.eml)이나 이미지 파일을 직접 열람하고 번역할 수 있습니다.")
+                Text("• Mail에서 선택한 메일 번역: 전역 단축키 ⌃⌥⇧⌘M은 어느 앱에서든 Mail의 선택 메시지를 즉시 번역하며, HTT 앱 활성 시에는 ⇧⌘T로도 실행할 수 있습니다. 서식·표·이미지를 그대로 보존하며 이 창의 '메일·이미지 번역' 섹션에 결과를 보여줍니다.")
+                Text("• 메일·이미지 번역 보기: 같은 섹션에서 이메일 파일(.eml)이나 이미지 파일을 직접 열거나 끌어다 놓아 번역할 수 있습니다. 다른 섹션으로 이동해도 번역은 이어지며, 도구 막대는 이 섹션에서만 나타납니다.")
+                Text("• 내용 지우기: HTT 창을 닫거나 '현재 내용 지우기'(⌘⌫)를 하면 메일 내용이 앱 메모리에서 사라집니다.")
                 Text("• Mail 상단 번역 버튼: Mail 창 상단 도구 막대에 번역 버튼을 연동하여 편리하게 이용할 수 있습니다 (앱 설정에서 켜기/끄기).")
 
                 HStack(spacing: 12) {
                     Button("Mail에서 선택한 메일 번역") {
                         AppModel.shared.translateSelectedMail()
                     }
-                    Button("메일 번역 창 열기") {
-                        AppModel.shared.showMainWindow()
+                    Button("메일·이미지 번역 보기") {
+                        settingsStore.section = .mail
                     }
                 }
                 .controlSize(.small)
@@ -172,7 +177,7 @@ public struct HTTGuideView: View {
                 Text("• 웹 번역 전송 동의: 외부 웹 번역 서비스를 이용할 경우 사전에 명시적 전송 동의를 거치며, 동의 없이 외부로 텍스트를 전송하지 않습니다.")
 
                 HStack(spacing: 12) {
-                    Button("브라우저 번역 설정…") {
+                    Button("브라우저 번역 설정") {
                         settingsStore.section = .browser
                     }
                 }
@@ -190,15 +195,15 @@ public struct HTTGuideView: View {
             badge: "트랙패드 잠금 해제 ⌃⌥⌘⎋"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("• 옵션별 선택 활성화: '입력 도우미 설정…'에서 자동 교정, 단어 변환, 문장 번역, 첫 단어 복구, 트랙패드 보호 등 원하는 기능을 각각 켜고 끌 수 있습니다.")
+                Text("• 옵션별 선택 활성화: '입력 도우미' 섹션에서 자동 교정, 단어 변환, 문장 번역, 첫 단어 복구, 트랙패드 보호 등 원하는 기능을 각각 켜고 끌 수 있습니다.")
                 Text("• 오타 교정 및 첫 단어 복구: 영문 자판 상태에서 입력한 한글(예: dkssud → 안녕)이나 한글 자판 상태의 영문을 자동으로 교정하며, 앱별 입력 언어 자동 전환을 지원합니다.")
                 Text("• 단어 변환(접미사 ''): 단어 뒤에 따옴표 두 번을 붙여 입력하면 수동 변환 또는 한영 번역됩니다 (예: 사과'' → apple 또는 tjqltm'' → 서비스, 5월'' → May).")
                 Text(verbatim: "• 문장 번역(문장 뒤 \\\\): 문장 뒤에 역슬래시 두 번(\\\\)을 입력하면 앞 줄 전체 문장을 번역합니다. 번역 기능은 macOS 26 이상과 사전 준비된 한국어-영어 모델이 필요하며, 모델이 미준비 상태이거나 실패할 경우 원문을 유지합니다.")
-                Text("• 개인 사전 및 직후 삭제(Delete) 원복: 원치 않는 교정이 일어났을 때 즉시 삭제(Delete/⌫) 키를 누르면 원래 타이핑으로 즉시 원복됩니다. 개인 사전은 단어 단위로만 등록되며 기기 내에만 로컬로 안전하게 저장됩니다.")
+                Text("• 개인 사전 및 직후 삭제(Delete) 원복: 원치 않는 교정이 일어났을 때 즉시 삭제(Delete/⌫) 키를 누르면 원래 타이핑으로 즉시 원복됩니다. 개인 변환 사전은 단어 단위로만 적용되며 기기 내에만 로컬로 저장됩니다. 입력 도우미 설정의 '사전 열기…'에서 단어를 직접 추가·수정·삭제할 수 있습니다.")
                 Text("• 트랙패드 잠금 비상 해제: ⌃⌥⌘⎋ (Control-Option-Command-Escape, Shift 불필요)를 누르면 잠긴 트랙패드가 즉시 강제 해제됩니다 (입력 도우미 기능은 일시정지되거나 꺼지지 않고 정상 유지됩니다).")
 
                 HStack(spacing: 12) {
-                    Button("입력 도우미 설정…") {
+                    Button("입력 도우미 설정") {
                         settingsStore.section = .input
                     }
                 }
@@ -220,13 +225,15 @@ public struct HTTGuideView: View {
                 Text("• 자동 정리: 저위험이며 휴지통에서 복원 가능한 파일만 즉시 정리합니다. 시뮬레이터와 프로세스는 자동으로 선택하거나 실행하지 않습니다.")
                 Text("• 지원되는 파일(DerivedData, XCTest 기기 캐시)은 시스템 휴지통으로 이동하며 필요 시 다시 복원할 수 있습니다.")
                 Text("• 시뮬레이터 삭제·데이터 초기화는 휴지통으로 이동하지 않으며 되돌릴 수 없으므로 신중히 점검 후 진행하십시오.")
-                Text("• 'Mac 상태·정리 항목 보기…'에서 시스템 저장 공간 상태와 정리 대상 항목을 안전하게 조회할 수 있습니다.")
+                Text("• 'Mac 관리' 섹션의 '상태·정리' 구간에서 시스템 저장 공간 상태와 정리 대상 항목을 조회하고, 바로 옆 '설정' 구간에서 사용 여부·자동 새로고침·정리 기능을 바꿉니다. 별도 창은 열리지 않습니다.")
 
                 HStack(spacing: 12) {
-                    Button("Mac 상태·정리 항목 보기…") {
-                        BTNIntegration.shared.showDetailWindow()
+                    Button("Mac 상태·정리 항목 보기") {
+                        settingsStore.macSegment = .status
+                        settingsStore.section = .macManagement
                     }
-                    Button("Mac 관리 설정…") {
+                    Button("Mac 관리 설정") {
+                        settingsStore.macSegment = .settings
                         settingsStore.section = .macManagement
                     }
                 }
@@ -258,14 +265,14 @@ public struct HTTGuideView: View {
             badge: "자동 업데이트"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("• 메뉴 막대에서 '업데이트 확인…'을 눌러 최신 안정화 버전을 간편하게 업데이트할 수 있습니다.")
+                Text("• 메뉴 막대에서 '업데이트 확인…'을 눌러 최신 안정화 버전을 간편하게 업데이트할 수 있습니다 (업데이트 창은 시스템 표준 방식으로 표시됩니다). 'HTT 정보'는 앱 설정 맨 위의 버전 정보로 이동합니다.")
                 Text("• 백그라운드 자동 업데이트 확인을 원하시면 메뉴 막대의 '권한·연결 상태' 메뉴 또는 설정에서 켤 수 있습니다.")
 
                 HStack(spacing: 12) {
                     Button("업데이트 확인…") {
                         (NSApp.delegate as? AppDelegate)?.checkForUpdates()
                     }
-                    Button("앱 설정 열기…") {
+                    Button("앱 설정 열기") {
                         settingsStore.section = .general
                     }
                 }

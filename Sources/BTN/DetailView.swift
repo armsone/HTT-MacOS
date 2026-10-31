@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 상세 창: 지표, 진단 설명, 개발 관련 프로세스 목록.
+/// Mac 관리 상세 영역: 지표, 진단 설명, 개발 관련 프로세스 목록(HTT 메인 창의 Mac 관리 섹션에 직접 들어간다).
 struct DetailView: View {
     @ObservedObject var model: MonitorViewModel
     @State private var isShowingAllHistory = false
@@ -161,7 +161,7 @@ struct DetailView: View {
                 .font(.title)
                 .foregroundStyle(model.statusColor)
             VStack(alignment: .leading) {
-                Text("HTT — Mac 관리 · 상태: \(model.effectiveStatusLabel)")
+                Text("Mac 상태: \(model.effectiveStatusLabel)")
                     .font(.title2.bold())
                 Text(model.effectiveKeyCause)
                     .foregroundStyle(.secondary)

@@ -1,7 +1,7 @@
 import SwiftUI
 import ServiceManagement
 
-// 일반 설정: Dock·Mail 버튼·로그인 자동 시작. 브라우저 설치는 같은 창의 브라우저 탭에 둔다.
+// 앱 설정: HTT 정보·테마·Dock·Mail 버튼·로그인 자동 시작. 브라우저 설치는 같은 창의 브라우저 번역 섹션에 둔다.
 
 struct AISettingsView: View {
     @State private var accounts = AIBIAccounts.shared
@@ -21,6 +21,18 @@ struct AISettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                LabeledContent("버전", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—")
+                LabeledContent("빌드", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")
+                HStack {
+                    Spacer()
+                    Button("업데이트 확인…") { (NSApp.delegate as? AppDelegate)?.checkForUpdates() }
+                }
+            } header: {
+                Text("HTT 정보")
+            } footer: {
+                Text("메뉴의 'HTT 정보'는 이 화면으로 이동합니다. 업데이트 확인은 시스템 표준 창으로 표시됩니다.")
+            }
             Section {
                 HStack {
                     Text("테마 (병기스타일)")

@@ -337,6 +337,8 @@ final class AIBINavigationGuard: NSObject, WKNavigationDelegate, WKUIDelegate {
         child.navigationDelegate = self
         child.uiDelegate = self
         let key = ObjectIdentifier(child)
+        // OAuth 자식 웹 보기는 전달받은 구성·window.opener를 그대로 둔 같은 웹 보기를 HTT 메인 창의 호스팅 스택 맨 위에 올린다
+        // (부모 웹 보기는 스택 아래에 그대로 붙어 있어 분리·재로드되지 않는다).
         let popup = AIBIBrowserWindow(title: "\(config.provider.title) 공식 로그인", header: Text("공식 계정 로그인"), webView: child)
         popup.onUserClose = { [weak self] in self?.closePopup(key) }
         authPopups[key] = AuthPopup(view: child, window: popup)
@@ -365,51 +367,93 @@ final class AIBINavigationGuard: NSObject, WKNavigationDelegate, WKUIDelegate {
 
 // MARK: - 보이는 AI 브라우저 창
 
+/// 사용자가 봐야 하는 AI·웹 번역·로그인 브라우저 화면(공식 로그인 OAuth 자식 웹 보기 포함).
+/// 별도 창을 만들지 않고 HTT 메인 창 작업 영역의 호스팅 스택에 웹 보기를 올린다(MailWindowCoordinator가 표시).
+/// 여러 개가 쌓이면 마지막이 맨 위에서만 입력을 받고, 아래 화면(예: OAuth 부모 웹 보기)은 같은 크기로 붙은 채 유지된다.
+/// onUserClose는 사용자가 닫기를 눌렀을 때만, close()는 프로그램이 닫을 때(onUserClose 없음) 쓴다. 둘 다 한 번만 동작한다.
 @MainActor
-final class AIBIBrowserWindow: NSObject, NSWindowDelegate {
-    private let panel: NSPanel
-    private var closingProgrammatically = false
+final class AIBIBrowserWindow: NSObject {
+    private var isClosed = false
     var onUserClose: (() -> Void)?
 
+    let title: String
+    let headerView: AnyView
+    let webView: WKWebView
+
+    /// 호스팅 스택의 안정적인 식별자(ForEach가 웹 보기를 다시 만들지 않게 한다).
+    var hostID: ObjectIdentifier { ObjectIdentifier(self) }
+
     init<Header: View>(title: String, header: Header, webView: WKWebView) {
-        panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 860),
-                        styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                        backing: .buffered, defer: false)
+        self.title = title
+        self.headerView = AnyView(header)
+        self.webView = webView
         super.init()
-        panel.title = title
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.isFloatingPanel = false
-        panel.becomesKeyOnlyIfNeeded = false
-        panel.minSize = NSSize(width: 640, height: 480)
-        panel.contentView = NSHostingView(rootView: VStack(spacing: 0) {
-            header
-            Divider()
-            AIBIWebViewContainer(webView: webView)
-        })
-        panel.delegate = self
-        panel.center()
     }
 
     func show() {
-        NSApp.activate()
-        panel.makeKeyAndOrderFront(nil)
+        isClosed = false
+        MailWindowCoordinator.shared.presentHostedBrowser(self)
     }
 
     func close() {
-        closingProgrammatically = true
-        panel.close()
+        guard !isClosed else { return }
+        isClosed = true
+        MailWindowCoordinator.shared.dismissHostedBrowser(self)
     }
 
-    func windowWillClose(_ notification: Notification) {
-        if !closingProgrammatically { onUserClose?() }
+    /// 메인 창 작업 영역의 '닫기'(또는 메인 창을 닫을 때): 사용자가 창을 닫은 것과 같게 onUserClose만 한 번 호출한다.
+    func userClose() {
+        guard !isClosed else { return }
+        isClosed = true
+        MailWindowCoordinator.shared.dismissHostedBrowser(self)
+        onUserClose?()
     }
 }
 
-private struct AIBIWebViewContainer: NSViewRepresentable {
+/// 메인 창 작업 영역 안에 놓이는 브라우저 화면: 제목·닫기 줄, 작업 머리글, 웹 보기.
+/// isActive가 false인 화면(스택 아래·섹션 이동으로 가려진 화면)은 붙어 있기만 하고 포커스·입력·접근성·단축키를 받지 않는다.
+struct AIBIHostedBrowserPane: View {
+    let browser: AIBIBrowserWindow
+    var isActive = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                Text(browser.title).font(.headline).lineLimit(1)
+                Spacer()
+                Button("닫기") { browser.userClose() }
+                    .help("이 화면을 닫습니다. 진행 중인 로그인·번역 작업은 취소됩니다.")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
+            browser.headerView
+            Divider()
+            AIBIWebViewContainer(webView: browser.webView, isActive: isActive)
+        }
+    }
+}
+
+struct AIBIWebViewContainer: NSViewRepresentable {
     let webView: WKWebView
+    var isActive = true
+
     func makeNSView(context: Context) -> WKWebView { webView }
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        // 가려진 웹 보기가 키 입력을 계속 받지 않도록, 비활성이 되면 첫 응답자만 내려놓는다(페이지는 건드리지 않음).
+        guard !isActive, let window = nsView.window, Self.holdsFocus(nsView, in: window) else { return }
+        DispatchQueue.main.async { [weak nsView, weak window] in
+            guard let nsView, let window, Self.holdsFocus(nsView, in: window) else { return }
+            window.makeFirstResponder(nil)
+        }
+    }
+
+    private static func holdsFocus(_ view: NSView, in window: NSWindow) -> Bool {
+        guard let responder = window.firstResponder as? NSView else { return false }
+        return responder === view || responder.isDescendant(of: view)
+    }
 }
 
 // MARK: - 실행 상태

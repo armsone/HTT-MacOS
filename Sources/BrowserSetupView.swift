@@ -21,7 +21,7 @@ struct BrowserSetupView: View {
                     HStack {
                         Text("웹 번역(DeepL·Google·Papago) 전송 동의")
                         Spacer()
-                        Button("설정 열기") { MailWindowCoordinator.shared.showSettings(section: .general) }
+                        Button("앱 설정으로 이동") { settingsStore.section = .general }
                     }
                 }
             }

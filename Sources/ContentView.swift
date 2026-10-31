@@ -2,10 +2,18 @@ import SwiftUI
 import Translation
 import UniformTypeIdentifiers
 
+/// 메일·이미지 번역 화면. HTT 메인 창 안에서 항상 한 번만 만들어져 다른 섹션으로 이동해도 번역 세션·문서·숨김 AI 표면이 유지된다.
+/// 메일 전용 도구 막대는 이 섹션이 앞에 있을 때(isActive)만 창 도구 막대에 나타난다.
 struct ContentView: View {
+    /// 메일 섹션이 앞에 보이는지. false여도 번역 작업과 상태는 그대로 이어진다.
+    var isActive = true
     @State private var model = AppModel.shared
     @State private var confirmRemoteImages = false
     @State private var isDropTargeted = false
+
+    init(isActive: Bool = true) {
+        self.isActive = isActive
+    }
 
     static let openableTypes: [UTType] = {
         var types: [UTType] = [.emailMessage, .image]
@@ -40,10 +48,17 @@ struct ContentView: View {
                 ExchangeRateStatusLine()
             }
         }
-        .frame(minWidth: 680, minHeight: 520)
+        .frame(minWidth: 520, minHeight: 380)
         // 외부 AI 숨김 실행용 실제 크기 웹 보기 표면(불투명 덮개 아래, 입력을 받지 않음)
         .aibiHiddenSurface(isMain: true)
-        .toolbar(id: "main-toolbar") { toolbarContent }
+        // 메일 도구 막대는 메일 섹션이 앞에 있을 때만 붙여, 다른 섹션으로 새지 않게 한다(뷰 자체는 계속 유지).
+        .background {
+            if isActive {
+                Color.clear
+                    .frame(width: 0, height: 0)
+                    .toolbar(id: "main-toolbar") { toolbarContent }
+            }
+        }
         // 번역 세션은 항상 존재하는 최상위 뷰에 붙여, 화면 전환으로 작업이 끊기지 않게 한다.
         .translationTask(model.translationConfig) { session in
             await model.performTranslation(session: session)
@@ -324,7 +339,7 @@ private struct StatusBar: View {
             if isAI {
                 Button("수동으로 진행") { model.startExternalManual() }
                     .help("공식 화면을 열고 요청 복사·응답 붙여넣기로 진행합니다(응답은 같은 형식 검증을 거칩니다)")
-                Button("로그인 관리") { MailWindowCoordinator.shared.showSettings() }
+                Button("로그인 관리") { MailWindowCoordinator.shared.showWorkbench(section: .general) }
             }
         case .idle, .awaitingAction:
             if p.pending > 0 {
@@ -334,7 +349,7 @@ private struct StatusBar: View {
                     .buttonStyle(.borderedProminent)
                     .help(isAI ? "실행하면 제목·본문 텍스트·이미지 글자(OCR)가 \(service.title) 웹 계정 대화로 전송됩니다"
                           : "실행하면 제목·본문 텍스트·이미지 글자(OCR)가 항목마다 \(service.title) 공식 웹페이지로 전송됩니다")
-                if isAI { Button("로그인 관리") { MailWindowCoordinator.shared.showSettings() } }
+                if isAI { Button("로그인 관리") { MailWindowCoordinator.shared.showWorkbench(section: .general) } }
             } else if model.imageWorkInProgress {
                 ProgressView().controlSize(.small)
                 Text("이미지 처리 중… (본문 \(p.done + p.failed)/\(p.total))")
@@ -361,12 +376,12 @@ private struct EmptyStateView: View {
             Image(systemName: "envelope.open")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
-            Text("메일 번역")
+            Text("메일·이미지 번역")
                 .font(.title2.bold())
             VStack(alignment: .leading, spacing: 6) {
                 Text("1. Mail에서 번역할 메시지를 하나 선택합니다.")
                 Text("2. Mail 메뉴 막대의 Mail › 서비스 › 메일 전체 번역을 고릅니다.")
-                Text("   (이 창의 '선택한 메일 번역'(⇧⌘T), 메뉴 막대의 '선택한 메일 번역', 전역 단축키 \(GlobalHotKey.mailDisplayString)도 같은 동작입니다.)")
+                Text("   (도구 막대의 '선택한 메일 번역'(⇧⌘T), 메뉴 막대의 '선택한 메일 번역', 전역 단축키 \(GlobalHotKey.mailDisplayString)도 같은 동작입니다.)")
                     .foregroundStyle(.secondary)
                 Text("처음에는 'Mail 제어' 허용 여부를 묻는 시스템 창이 나타날 수 있습니다.")
                     .foregroundStyle(.secondary)
@@ -377,7 +392,7 @@ private struct EmptyStateView: View {
                     .keyboardShortcut(.defaultAction)
                 Button(".eml/이미지 파일 열기…") { model.showImporter = true }
             }
-            Text("또는 .eml 파일이나 이미지를 이 창으로 끌어다 놓으세요.")
+            Text("또는 .eml 파일이나 이미지를 이 화면으로 끌어다 놓으세요.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Group {
@@ -443,7 +458,7 @@ private struct DocumentView: View {
     }
 
     private var footer: some View {
-        Text("원본 메일은 변경되지 않았습니다. 창을 닫으면 앱의 메모리에서 내용이 사라집니다."
+        Text("원본 메일은 변경되지 않았습니다. HTT 창을 닫거나 '현재 내용 지우기'를 하면 앱의 메모리에서 내용이 사라집니다."
              + (model.backend.webTranslator != nil ? " 웹 번역기로 이미 보낸 내용은 해당 서비스에 기록될 수 있습니다."
                 : model.backend.isExternal ? " 외부 AI로 이미 보낸 내용은 해당 서비스 대화 기록에 남을 수 있습니다." : ""))
             .font(.caption)

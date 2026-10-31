@@ -1,13 +1,17 @@
 import SwiftUI
 
-/// HTT 설정 화면에 포함되는 Mac 관리(BTN) 설정 뷰.
+/// HTT 메인 창의 Mac 관리 섹션 '설정' 구간에 포함되는 Mac 관리(BTN) 설정 뷰.
 /// 전달받은 `BTNIntegration` 인스턴스의 `@Published` 상태를 그대로 관찰하며 인스턴스를 중복 생성하지 않는다.
 @MainActor
 public struct BTNSettingsView: View {
     @ObservedObject private var integration: BTNIntegration
 
-    public init(integration: BTNIntegration = .shared) {
+    /// 상태·정리 화면으로 같은 영역에서 돌아가는 동작(메인 창의 Mac 관리 구간 전환). nil이면 버튼을 숨긴다.
+    private let onShowStatus: (() -> Void)?
+
+    public init(integration: BTNIntegration = .shared, onShowStatus: (() -> Void)? = nil) {
         self.integration = integration
+        self.onShowStatus = onShowStatus
     }
 
     public var body: some View {
@@ -31,7 +35,7 @@ public struct BTNSettingsView: View {
                     .foregroundStyle(integration.statusColor)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("HTT — Mac 관리")
+                    Text("Mac 관리 설정")
                         .font(.headline)
                     Text(integration.statusSummary)
                         .font(.callout)
@@ -184,14 +188,17 @@ public struct BTNSettingsView: View {
         }
     }
 
+    @ViewBuilder
     private var actionsRow: some View {
-        HStack {
-            Button {
-                integration.showDetailWindow()
-            } label: {
-                Label("Mac 관리 상세 창 열기…", systemImage: "list.bullet.rectangle")
+        if let onShowStatus {
+            HStack {
+                Button {
+                    onShowStatus()
+                } label: {
+                    Label("상태·정리 항목 보기", systemImage: "list.bullet.rectangle")
+                }
+                Spacer()
             }
-            Spacer()
         }
     }
 }

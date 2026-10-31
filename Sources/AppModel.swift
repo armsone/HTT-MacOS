@@ -312,7 +312,8 @@ final class AppModel {
             return
         }
         guard self.document?.id == document.id else { return }
-        MailWindowCoordinator.shared.closeMailWindow()
+        // 휴지통으로 옮긴 메일은 지우되, 메인 창과 다른 섹션은 그대로 둔다(메일 번역 화면은 빈 상태로 돌아간다).
+        MailWindowCoordinator.shared.closeMailDocument()
     }
 
     func open(url: URL) {
@@ -368,14 +369,14 @@ final class AppModel {
         errorNeedsAutomationSettings = (error as? MailBridgeError) == .notAuthorized
     }
 
-    /// 메일 번역 결과 창을 앞으로 가져온다. 창이 없으면 새로 만든다(MailWindowCoordinator).
+    /// HTT 메인 창을 메일·이미지 번역 섹션으로 앞에 가져온다. 창이 없으면 새로 만든다(MailWindowCoordinator).
     func showMainWindow() {
         MailWindowCoordinator.shared.showMailWindow()
     }
 
-    /// 메일 내용을 지워야 하는 결과 창인지(설정 창·AI 브라우저 패널·화면 번역 창 제외)
+    /// 닫으면 메일 내용을 지우는 HTT 메인 창인지(화면 번역 캡처 영역·인증 팝업 패널 제외)
     static func isResultWindow(_ window: NSWindow) -> Bool {
-        MailWindowCoordinator.shared.isMailWindow(window)
+        MailWindowCoordinator.shared.isWorkbenchWindow(window)
     }
 
     nonisolated private static func parseMessage(_ data: Data, preferUTF8: Bool,

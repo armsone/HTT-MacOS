@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// HTT 1.0.0 통합 워크벤치 네비게이션 섹션.
-/// 홈, 번역·브라우저, 입력 도우미, Mac 관리, 사용 방법, 앱 설정으로 구성된다.
+/// HTT 메인 창의 사이드바 섹션. 모든 기능이 이 한 창 안에서 목적별로 이동한다.
+/// 홈, 메일·이미지 번역, 화면 번역, 브라우저 번역, 입력 도우미, Mac 관리, 사용 방법, 앱 설정으로 구성된다.
 public enum SettingsSection: Hashable, CaseIterable, Identifiable {
     case home
+    case mail
+    case screen
     case browser
     case input
     case macManagement
@@ -15,7 +17,9 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
     public var title: String {
         switch self {
         case .home: return "홈"
-        case .browser: return "번역·브라우저"
+        case .mail: return "메일·이미지 번역"
+        case .screen: return "화면 번역"
+        case .browser: return "브라우저 번역"
         case .input: return "입력 도우미"
         case .macManagement: return "Mac 관리"
         case .help: return "사용 방법"
@@ -26,6 +30,8 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
     public var iconId: String {
         switch self {
         case .home: return "home"
+        case .mail: return "mail"
+        case .screen: return "screen"
         case .browser: return "browser"
         case .input: return "edit"
         case .macManagement: return "device_files"
@@ -33,22 +39,61 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
         case .general: return "settings"
         }
     }
+
+    /// 사이드바의 첫 묶음(작업 목적별 기능). 나머지는 안내·설정 묶음.
+    static let taskSections: [SettingsSection] = [.home, .mail, .screen, .browser, .input, .macManagement]
+    static let supportSections: [SettingsSection] = [.help, .general]
 }
 
-/// 설정 창이 열려 있는 동안 메뉴 막대에서 다시 "브라우저 번역…" 등을 눌러도 같은 창에서 탭만 바꾼다.
+/// Mac 관리 섹션 안에서 바로 전환하는 두 구간(별도 창 없이 같은 상세 영역을 바꾼다).
+public enum MacManagementSegment: String, CaseIterable, Identifiable {
+    case status
+    case settings
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .status: return "상태·정리"
+        case .settings: return "설정"
+        }
+    }
+}
+
+/// 메인 창의 현재 섹션과 작업 영역 상태를 보존한다. 창이 열려 있는 동안 메뉴·버튼·서비스 어디서 요청해도 같은 창에서 섹션만 바뀐다.
 @MainActor
 public final class SettingsSectionStore: ObservableObject {
-    @Published public var section: SettingsSection = .home
+    public static let shared = SettingsSectionStore()
+
+    @Published public var section: SettingsSection = .home {
+        didSet {
+            // 사용자가 다른 섹션으로 이동하면 열려 있던 브라우저 화면은 배너로 접고, 돌아가기로 다시 볼 수 있다.
+            if section != oldValue {
+                showsHostedBrowser = false
+                onSectionChanged?()
+            }
+        }
+    }
+    /// 섹션이 실제로 바뀔 때마다(사용자 이동·메뉴 모두) 호출 — 코디네이터가 임시로 내린 캡처를 포기하는 데 쓴다.
+    var onSectionChanged: (() -> Void)?
     /// 창이 처음 만들어지기 전의 요청도 보존하며, 시트를 닫으면 바인딩이 다시 false로 바뀐다.
     @Published public var showLanguagePackSheet = false
+    @Published public var macSegment: MacManagementSegment = .status
+    /// 메인 창 안에 올린 AI·웹 번역·로그인 브라우저 화면(여러 개면 마지막이 대표).
+    @Published var hostedBrowsers: [AIBIBrowserWindow] = []
+    @Published var showsHostedBrowser = false
+    /// 웹 번역(메일·화면 요청, 열린 앱 창 없음)이 진행되는 동안의 숨김 웹 보기 호스트와 진행·취소 줄.
+    @Published var statusPanel: WebTranslatorStatusPanel?
+
+    var hostedBrowser: AIBIBrowserWindow? { hostedBrowsers.last }
 
     public init(section: SettingsSection = .home) {
         self.section = section
     }
 }
 
-/// HTT 1.0.0 통합 워크벤치 뷰 (SettingsView).
-/// 네이티브 사이드바 및 상세 영역 구조로 모든 기능과 설정, 사용 방법을 한 창에서 제공한다.
+/// HTT 메인 작업 창의 내용 (SettingsView).
+/// 지속되는 사이드바와 선택한 작업의 상세 영역으로 구성된다. 메일 번역(ContentView)은 섹션을 바꿔도 사라지지 않는다.
 public struct SettingsView: View {
     @ObservedObject public var store: SettingsSectionStore
     @ObservedObject private var appearance = HTTAppearanceStore.shared
@@ -63,14 +108,17 @@ public struct SettingsView: View {
     }
 
     public var body: some View {
-        NavigationSplitView {
+        // NavigationSplitView의 상세 열은 창의 연결된 도구 막대(sceneBridgingOptions = [.toolbars])와 겹쳐
+        // 자체 탐색 막대 영역(약 52pt 흐림 띠)을 상세 위쪽에 따로 만들었다. 탐색 컨테이너가 필요 없는 구성이므로
+        // 항상 보이는 사이드바와 상세 영역을 HSplitView로 나란히 두고, 창 도구 막대는 AppKit 쪽 하나만 쓴다.
+        HSplitView {
             sidebarView
-                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 250)
-        } detail: {
+                .frame(minWidth: 190, idealWidth: 210, maxWidth: 250, maxHeight: .infinity)
             detailView
+                .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(minWidth: 760, idealWidth: 900, maxWidth: .infinity,
-               minHeight: 560, idealHeight: 700, maxHeight: .infinity)
+        .frame(minWidth: 780, idealWidth: 1040, maxWidth: .infinity,
+               minHeight: 560, idealHeight: 760, maxHeight: .infinity)
         .preferredColorScheme(appearance.effectiveColorScheme(for: systemColorScheme))
     }
 
@@ -78,19 +126,16 @@ public struct SettingsView: View {
 
     private var sidebarView: some View {
         VStack(spacing: 0) {
-            List(SettingsSection.allCases, id: \.self, selection: Binding(
+            List(selection: Binding(
                 get: { store.section },
-                set: { if let newSection = $0 { store.section = newSection } }
-            )) { section in
-                NavigationLink(value: section) {
-                    Label {
-                        Text(section.title)
-                            .font(.body)
-                    } icon: {
-                        HTTIconView(id: section.iconId, size: 18)
-                    }
+                set: { if let newSection = $0 { select(newSection) } }
+            )) {
+                Section {
+                    ForEach(SettingsSection.taskSections) { sidebarRow($0) }
                 }
-                .tag(section)
+                Section {
+                    ForEach(SettingsSection.supportSections) { sidebarRow($0) }
+                }
             }
             .listStyle(.sidebar)
 
@@ -110,27 +155,227 @@ public struct SettingsView: View {
         .background(palette.card)
     }
 
-    // MARK: - 상세 영역 (Detail View)
+    private func sidebarRow(_ section: SettingsSection) -> some View {
+        // 탐색 스택이 없으므로 NavigationLink 대신 List 선택(태그)으로 이동한다. 방향키·VoiceOver 선택은 List가 그대로 처리한다.
+        Label {
+            Text(section.title)
+                .font(.body)
+        } icon: {
+            HTTIconView(id: section.iconId, size: 18)
+        }
+        .tag(section)
+    }
 
+    /// 사이드바 선택: Mac 관리는 표시 직전에 충돌 상태를 새로 확인한다(별도 창 없음).
+    private func select(_ section: SettingsSection) {
+        if section == .macManagement { BTNIntegration.shared.prepareForDisplay() }
+        store.section = section
+    }
+
+    // MARK: - 상세 영역 (Detail)
+
+    private var showsBrowser: Bool {
+        store.hostedBrowser != nil && store.showsHostedBrowser
+    }
+
+    private var isMailFront: Bool {
+        store.section == .mail && !showsBrowser
+    }
+
+    /// 메일 번역 뷰(번역 세션·숨김 AI 표면·가져오기·알림을 소유)는 항상 한 번만 만들어 두고,
+    /// 다른 섹션은 그 위를 불투명하게 덮어 보여 준다. 섹션을 바꿔도 번역 작업과 문서가 끊기지 않는다.
+    /// 열린 브라우저 화면(AI 로그인·수동 진행·웹 번역 확인·OAuth 자식)은 모두 항상 붙여 두고 맨 위 하나만 보여 준다.
+    /// 모든 층은 항상 같은 자리에 붙어 있는 형제 뷰이고(조건부로 다시 만들지 않아 식별자·웹 보기가 유지된다), 투명도는 쓰지 않는다.
+    /// 어느 층이든 실제 크기와 불투명도 그대로이며, 앞에 보이는 층은 자체 불투명 배경으로 아래를 가린다.
+    /// 앞뒤 순서는 zIndex로만 바꾼다: 웹 번역 호스트(0) / 메일 뷰와 브라우저 스택(메일이 앞이면 메일 2·스택 1, 브라우저가 앞이면 스택 3·메일 2) / 섹션 내용(4).
     @ViewBuilder
     private var detailView: some View {
-        Group {
-            switch store.section {
-            case .home:
-                HTTHomeView(settingsStore: store)
-            case .browser:
-                BrowserSetupView(settingsStore: store)
-            case .input:
-                InputMateSettingsView()
-            case .macManagement:
-                BTNSettingsView(integration: .shared)
-            case .help:
-                HTTGuideView(settingsStore: store)
-            case .general:
-                AISettingsView()
+        VStack(spacing: 0) {
+            if store.statusPanel != nil {
+                // 어느 섹션에 있든 웹 번역 진행과 취소가 보이도록 전역 줄로 둔다.
+                WebTranslatorPanelContent()
+                Divider()
+            }
+            if let browser = store.hostedBrowser, !store.showsHostedBrowser {
+                hostedBrowserBanner(browser)
+            }
+            ZStack {
+                if let panel = store.statusPanel {
+                    // 숨김 웹 보기 호스트: 실제 크기로 이 창에 붙어 있고, 자체 불투명 덮개 아래라 보이지 않는다.
+                    WebTranslatorStatusHost(panel: panel)
+                        .frame(width: AIBIHiddenSurface.viewport.width, height: AIBIHiddenSurface.viewport.height)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .clipped()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .zIndex(0)
+                }
+                // 불투명 배경을 가진 메일 뷰: 메일이 앞이면 브라우저 스택을 덮고, 브라우저가 앞이면 스택 아래로 내려간다.
+                ContentView(isActive: isMailFront)
+                    .modifier(OpaqueCover(background: palette.bg))
+                    .clipped()
+                    .allowsHitTesting(isMailFront)
+                    // 가려진 동안 기본 버튼(Return) 같은 단축키가 메일 번역을 실행하지 않게 한다.
+                    .disabled(!isMailFront)
+                    .accessibilityHidden(!isMailFront)
+                    .zIndex(2)
+                hostedBrowserStack
+                    .zIndex(showsBrowser ? 3 : 1)
+                if !showsBrowser && store.section != .mail {
+                    sectionContent
+                        .modifier(OpaqueCover(background: palette.bg))
+                        .zIndex(4)
+                }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.bg)
+    }
+
+    /// 쌓인 모든 브라우저 화면을 안정적인 식별자로 한 번씩만 마운트한다. 부모(예: OAuth 부모 웹 보기)는 자식이 올라와도,
+    /// 섹션을 잠시 바꿔도 분리·재생성되지 않고 같은 크기로 붙어 있다. 입력·포커스·접근성은 맨 위 화면만 받는다.
+    private var hostedBrowserStack: some View {
+        ZStack {
+            ForEach(store.hostedBrowsers, id: \.hostID) { browser in
+                let active = showsBrowser && browser === store.hostedBrowser
+                AIBIHostedBrowserPane(browser: browser, isActive: active)
+                    .modifier(OpaqueCover(background: palette.bg))
+                    .allowsHitTesting(active)
+                    .disabled(!active)
+                    .accessibilityHidden(!active)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch store.section {
+        case .home:
+            HTTHomeView(settingsStore: store)
+        case .mail:
+            EmptyView()
+        case .screen:
+            ScreenTranslationPane()
+        case .browser:
+            BrowserSetupView(settingsStore: store)
+        case .input:
+            InputMateSettingsView()
+        case .macManagement:
+            MacManagementPane(store: store)
+        case .help:
+            HTTGuideView(settingsStore: store)
+        case .general:
+            AISettingsView()
+        }
+    }
+
+    private func hostedBrowserBanner(_ browser: AIBIBrowserWindow) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "globe")
+            Text("\(browser.title) 화면이 열려 있습니다.")
+                .font(.callout)
+                .lineLimit(1)
+            Spacer()
+            Button("돌아가기") { store.showsHostedBrowser = true }
+                .buttonStyle(.borderedProminent)
+            Button("닫고 작업 취소") { browser.userClose() }
+        }
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(palette.warnSoft)
+    }
+}
+
+/// 아래에 깔린 메일 번역 뷰(숨김 웹 보기 표면 포함)가 비치지 않도록 상세 영역을 불투명하게 덮는다.
+private struct OpaqueCover: ViewModifier {
+    let background: Color
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background {
+                Color(nsColor: .windowBackgroundColor)
+                    .overlay(background)
+            }
+    }
+}
+
+// MARK: - Mac 관리 (상태·정리 / 설정을 같은 영역에서 전환)
+
+private struct MacManagementPane: View {
+    @ObservedObject var store: SettingsSectionStore
+    @ObservedObject private var integration = BTNIntegration.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: integration.statusSymbolName)
+                    .foregroundStyle(integration.statusColor)
+                Text(integration.statusSummary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
+                Picker("Mac 관리 구간", selection: $store.macSegment) {
+                    ForEach(MacManagementSegment.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 190)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            Divider()
+            switch store.macSegment {
+            case .status:
+                DetailView(model: integration.model)
+            case .settings:
+                BTNSettingsView(integration: integration, onShowStatus: { store.macSegment = .status })
+            }
+        }
+        .onAppear { integration.prepareForDisplay() }
+    }
+}
+
+// MARK: - 화면 번역 (임시 캡처 모드 안내와 시작)
+
+private struct ScreenTranslationPane: View {
+    @ObservedObject private var appearance = HTTAppearanceStore.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var palette: HTTThemePalette {
+        appearance.palette(for: colorScheme)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label("다른 앱 위에 투명한 캡처 영역을 띄워 그 안의 글자를 번역합니다.", systemImage: "text.viewfinder")
+                            .font(.headline)
+                        Text("캡처 모드가 시작되면 이 작업 창은 잠시 숨겨지고, 영역의 닫기 버튼이나 Esc로 끝내면 같은 작업 창으로 돌아옵니다. 작업 창과 캡처 영역이 함께 겹쳐 보이지는 않습니다.")
+                            .font(.callout)
+                            .foregroundStyle(palette.text2)
+                        Text("다른 앱을 보는 중이라면 전역 단축키 \(GlobalHotKey.displayString)으로 바로 캡처 모드를 열 수 있습니다(이 경우 끝낸 뒤 작업 창을 자동으로 열지 않습니다).")
+                            .font(.callout)
+                            .foregroundStyle(palette.text2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                }
+                HStack {
+                    Button {
+                        MailWindowCoordinator.shared.startCaptureModeFromWorkbench()
+                    } label: {
+                        Label("캡처 모드 시작", systemImage: "viewfinder")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    Spacer()
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

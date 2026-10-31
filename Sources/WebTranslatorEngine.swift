@@ -821,9 +821,12 @@ final class WebTranslatorRunner {
     /// 보이는 창(사용자 확인 중)이면 그대로 두고, 아니면 이미 떠 있는 앱 창(숨김 표면)에 먼저 붙인다. 브라우저
     /// 요청은 사용자가 다른 앱에 있어 그런 창이 없을 수 있으므로, 그때만 이 기능이 소유한 작은 배경 창(화면 안의
     /// 실제 창이지만 다른 창 뒤에 머무르고 불투명 덮개 아래라 보이지 않음)을 새로 만들어 붙인다. 브라우저가 아닌
-    /// 기능(메일·화면)은 숨김 표면이 없을 때 기존 작은 진행 패널로 대체한다(동작 그대로 유지).
+    /// 기능(메일·화면)은 숨김 표면이 없을 때 HTT 메인 창 안의 진행·취소 줄과 숨김 호스트로 대체한다.
     private func mount(owner: Owner, surface: AIBIHostView?) {
         guard let webView, window == nil else { return }
+        // 메인 창 안 진행 줄이 떠 있는 동안은 항목마다 호스트를 옮기지 않는다. 진행 줄 때문에 메인 창이 보이게 되면
+        // 아래 숨김 표면 분기가 선택돼 진행 줄이 곧바로 내려가고(캡처 복귀 → 다음 항목에서 다시 표시) 반복되기 때문이다.
+        if let panel, panel.isShown, webView.superview === panel.host { return }
         if let host = AIBIHiddenSurface.shared.availableHost(preferring: surface) {
             panel?.hide()
             backgroundWindow?.hide()
@@ -1293,58 +1296,48 @@ final class WebTranslatorBackgroundWindow {
     }
 }
 
-/// 메일·화면 번역 요청인데 숨김 표면(열린 결과 창)이 없을 때만 쓰는 작은 진행 창. 웹 보기는 불투명 덮개 아래에 있고,
-/// 진행 단계와 취소만 보인다. 브라우저 요청은 이 패널을 쓰지 않고 WebTranslatorBackgroundWindow(또는 숨김 표면)를 쓴다.
+/// 메일·화면 번역 요청인데 숨김 표면(열린 결과 창)이 없을 때만 쓰는 진행 표시. 별도 패널·창을 만들지 않고,
+/// HTT 메인 창(MailWindowCoordinator)이 이 객체의 호스트를 불투명 내용 뒤에 실제 크기로 붙이고 작업 영역 맨 위에
+/// 진행 단계와 취소 줄(WebTranslatorPanelContent)을 보인다. 브라우저 요청은 이 객체를 쓰지 않고
+/// WebTranslatorBackgroundWindow(또는 숨김 표면)를 쓰므로 메인 창을 열거나 활성화하지 않는다.
+/// show()·hide()는 여러 번 불려도 한 번만 반영되고(show가 항목마다 불려도 다시 띄우지 않음), 메인 창을 닫으면 userClose()로 onUserClose가 한 번 불린다.
 @MainActor
-final class WebTranslatorStatusPanel: NSObject, NSWindowDelegate {
+final class WebTranslatorStatusPanel {
     let host = AIBIHostView(frame: NSRect(origin: .zero, size: AIBIHiddenSurface.viewport))
     var onUserClose: (() -> Void)?
-    private let panel: NSPanel
-    private var closingProgrammatically = false
-
-    override init() {
-        let size = NSSize(width: 460, height: 84)
-        panel = NSPanel(contentRect: NSRect(origin: .zero, size: size),
-                        styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow],
-                        backing: .buffered, defer: false)
-        super.init()
-        panel.title = "HTT 웹 번역 진행 중"
-        panel.isReleasedWhenClosed = false
-        panel.hidesOnDeactivate = false
-        panel.isFloatingPanel = true
-        panel.becomesKeyOnlyIfNeeded = true
-        let container = NSView(frame: NSRect(origin: .zero, size: size))
-        host.frame.origin = .zero
-        container.addSubview(host)
-        let status = NSHostingView(rootView: WebTranslatorPanelContent())
-        status.frame = container.bounds
-        status.autoresizingMask = [.width, .height]
-        container.addSubview(status)
-        panel.contentView = container
-        panel.delegate = self
-        if let screen = NSScreen.main?.visibleFrame {
-            panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - size.width - 24, y: screen.maxY - 24))
-        }
-    }
+    private(set) var isShown = false
 
     func show() {
-        closingProgrammatically = false
-        if !panel.isVisible { panel.orderFrontRegardless() }
+        guard !isShown else { return }
+        isShown = true
+        MailWindowCoordinator.shared.presentStatusPanel(self)
     }
 
     func hide() {
-        guard panel.isVisible else { return }
-        closingProgrammatically = true
-        panel.orderOut(nil)
-        closingProgrammatically = false
+        guard isShown else { return }
+        isShown = false
+        MailWindowCoordinator.shared.dismissStatusPanel(self)
     }
 
-    func windowWillClose(_ notification: Notification) {
-        if !closingProgrammatically { onUserClose?() }
+    /// 메인 창을 닫음: 사용자가 진행 표시를 닫은 것과 같게 onUserClose만 한 번 호출한다.
+    func userClose() {
+        guard isShown else { return }
+        isShown = false
+        MailWindowCoordinator.shared.dismissStatusPanel(self)
+        onUserClose?()
     }
 }
 
-private struct WebTranslatorPanelContent: View {
+/// 메인 창에 WebTranslatorStatusPanel의 호스트(숨김 웹 보기)를 올린다. 같은 호스트를 그대로 돌려주므로 다시 마운트돼도 웹 보기는 유지된다.
+struct WebTranslatorStatusHost: NSViewRepresentable {
+    let panel: WebTranslatorStatusPanel
+
+    func makeNSView(context: Context) -> AIBIHostView { panel.host }
+    func updateNSView(_ nsView: AIBIHostView, context: Context) {}
+}
+
+/// 메인 창 맨 위의 웹 번역 진행·취소 줄(어느 섹션에서나 보인다).
+struct WebTranslatorPanelContent: View {
     private let runner = WebTranslatorRunner.shared
 
     var body: some View {
@@ -1364,7 +1357,7 @@ private struct WebTranslatorPanelContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }

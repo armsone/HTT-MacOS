@@ -429,13 +429,16 @@ final class OverlayPanelController: NSObject {
 
     /// 숨기기·종료(applicationWillTerminate도 여기를 거침): 크기 조절 중이면 먼저 마무리해 크기 저장을
     /// 놓치지 않는다. 프레임은 그대로 두어 다시 보일 때 같은 자리에 나타난다.
-    func hide() {
+    ///
+    /// notifyOnHide가 false이면 같은 캡처 작업을 취소하지 않고 영역만 잠시 내린다(작업 창 안의 AI·웹 번역 화면을 보여 주는 동안의
+    /// 임시 숨김). onWillHide(화면 번역 취소·캡처 모드 종료 처리)는 부르지 않으며, 사용자가 닫거나 끝내는 경로는 기본값(true)을 쓴다.
+    func hide(notifyOnHide: Bool = true) {
         if isResizing { resizeEnded() }
         if isRegionChangeEndPending {
             isRegionChangeEndPending = false
             onRegionChangeEnded?()
         }
-        onWillHide?()
+        if notifyOnHide { onWillHide?() }
         panel.orderOut(nil)
         panel.ignoresMouseEvents = true
         lastHit = .none

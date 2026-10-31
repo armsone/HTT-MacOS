@@ -138,7 +138,7 @@ public struct HTTHomeView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("필요한 기능을 선택하세요")
                             .font(.headline)
-                        Text("화면·메일·브라우저 번역, 입력 도우미, Mac 관리 기능을 아래 각 카드에서 상태를 확인하고 실행할 수 있습니다.")
+                        Text("모든 기능이 이 창 하나에서 열립니다. 왼쪽 사이드바나 아래 카드에서 상태를 확인하고 바로 실행하세요.")
                             .font(.callout)
                             .foregroundStyle(palette.text2)
                     }
@@ -165,7 +165,7 @@ public struct HTTHomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     HTTIconView(id: "browser", size: 24)
-                    Text("번역 및 브라우저")
+                    Text("번역")
                         .font(.title3.bold())
                     Spacer()
                 }
@@ -176,7 +176,7 @@ public struct HTTHomeView: View {
                     HStack {
                         Text("화면 번역:")
                             .font(.subheadline.bold())
-                        Text("투명 영역 캡처 후 원문 줄 위치에 즉시 번역 (전역 단축키 \(GlobalHotKey.displayString)으로 창 열기, 앱 내 ⌘0)")
+                        Text("투명 캡처 영역의 글자를 원문 줄 위치에 즉시 번역 (캡처 모드 중에는 이 창이 잠시 숨겨졌다가 끝나면 돌아옵니다 · 전역 단축키 \(GlobalHotKey.displayString), 앱 내 ⌘0)")
                             .font(.subheadline)
                             .foregroundStyle(palette.text2)
                     }
@@ -198,19 +198,19 @@ public struct HTTHomeView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Button("화면 번역 창 열기") {
-                            (NSApp.delegate as? AppDelegate)?.showOverlay()
+                        Button("화면 번역 캡처 시작") {
+                            MailWindowCoordinator.shared.startCaptureModeFromWorkbench()
                         }
                         Button("Mail에서 선택한 메일 번역") {
                             AppModel.shared.translateSelectedMail()
                         }
-                        Button("메일 번역 창 열기") {
-                            AppModel.shared.showMainWindow()
+                        Button("메일·이미지 번역 보기") {
+                            settingsStore.section = .mail
                         }
                     }
                     HStack {
                         Spacer()
-                        Button("브라우저 번역 설정…") {
+                        Button("브라우저 번역 설정") {
                             settingsStore.section = .browser
                         }
                         .buttonStyle(.link)
@@ -283,7 +283,7 @@ public struct HTTHomeView: View {
                     }
                     HStack {
                         Spacer()
-                        Button("입력 도우미 설정…") {
+                        Button("입력 도우미 설정") {
                             settingsStore.section = .input
                         }
                         .buttonStyle(.link)
@@ -333,13 +333,15 @@ public struct HTTHomeView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Button("Mac 상태·정리 항목 보기…") {
-                            btnIntegration.showDetailWindow()
+                        Button("Mac 상태·정리 항목 보기") {
+                            settingsStore.macSegment = .status
+                            settingsStore.section = .macManagement
                         }
                     }
                     HStack {
                         Spacer()
-                        Button("Mac 관리 설정…") {
+                        Button("Mac 관리 설정") {
+                            settingsStore.macSegment = .settings
                             settingsStore.section = .macManagement
                         }
                         .buttonStyle(.link)
@@ -360,7 +362,7 @@ public struct HTTHomeView: View {
             } label: {
                 HStack {
                     HTTIconView(id: "help", size: 18)
-                    Text("사용 방법 안내 보기…")
+                    Text("사용 방법")
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -372,7 +374,7 @@ public struct HTTHomeView: View {
             } label: {
                 HStack {
                     HTTIconView(id: "settings", size: 18)
-                    Text("앱 설정 (테마·Dock·시작)…")
+                    Text("앱 설정 (HTT 정보·테마·Dock·시작)")
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
