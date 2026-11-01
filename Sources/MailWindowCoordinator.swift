@@ -92,10 +92,11 @@ final class MailWindowCoordinator: NSObject, NSWindowDelegate {
     /// forceLayout: 숨김 웹 보기를 붙일 호스트가 이 창에 곧바로 실제 크기로 붙도록 한 번 레이아웃을 끝낸다.
     private func presentWorkbenchWindow(forceLayout: Bool = false) {
         guard !isTerminating else { return }
-        NSApp.activate()
         let window = workbenchWindow ?? makeWorkbenchWindow()
         if window.isMiniaturized { window.deminiaturize(nil) }
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
         if forceLayout { window.contentView?.layoutSubtreeIfNeeded() }
     }
 

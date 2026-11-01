@@ -23,6 +23,8 @@ struct InputMateSettingsView: View {
                     AppInputLanguageSettingsView()
                 case .koreanTypo:
                     koreanTypoSettings
+                case .personalDictionary:
+                    personalDictionarySettings
                 case .trackpad:
                     trackpadSettings
                 case .general:
@@ -103,15 +105,6 @@ struct InputMateSettingsView: View {
                         .padding(.vertical, 4)
                 }
 
-                Section("개인 사전") {
-                    Toggle("개인 사전 사용", isOn: preferenceBinding(\.personalDictionaryEnabled))
-                    Toggle("교정 단어 자동 학습", isOn: preferenceBinding(\.personalDictionaryAutoLearnEnabled))
-                        .disabled(!settings.preferences.personalDictionaryEnabled)
-
-                    PersonalDictionaryView()
-                        .padding(.vertical, 4)
-                }
-
                 Section("첫 단어 입력 복구") {
                     Toggle("선택한 앱에서 빈 입력창 첫 단어 복구", isOn: preferenceBinding(\.firstWordRecoveryEnabled))
                     Text("선택한 앱의 빈 입력창에서 첫 단어를 입력할 때 실시간 입력 화면을 그대로 유지하며, 공백이나 문장 부호 입력 시점에 조합 의도와 실제 입력 결과를 비교해 안전한 경우에만 자동으로 교정합니다. 지원되지 않거나 불확실한 입력창은 건너뜁니다.")
@@ -162,6 +155,25 @@ struct InputMateSettingsView: View {
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 4)
                     }
+                }
+            }
+            .formStyle(.grouped)
+            .padding(.horizontal, 4)
+        }
+    }
+
+    // MARK: - Tab: 개인 사전
+
+    private var personalDictionarySettings: some View {
+        ScrollView {
+            Form {
+                Section("개인 사전") {
+                    Toggle("개인 사전 사용", isOn: preferenceBinding(\.personalDictionaryEnabled))
+                    Toggle("교정 단어 자동 학습", isOn: preferenceBinding(\.personalDictionaryAutoLearnEnabled))
+                        .disabled(!settings.preferences.personalDictionaryEnabled)
+
+                    PersonalDictionaryView()
+                        .padding(.vertical, 4)
                 }
             }
             .formStyle(.grouped)

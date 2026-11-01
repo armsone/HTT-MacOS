@@ -49,6 +49,7 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
 public enum InputMatePage: Int, CaseIterable, Identifiable {
     case appLanguage
     case koreanTypo
+    case personalDictionary
     case trackpad
     case general
 
@@ -58,6 +59,7 @@ public enum InputMatePage: Int, CaseIterable, Identifiable {
         switch self {
         case .appLanguage: return "앱별 입력 언어"
         case .koreanTypo: return "한글 교정 및 번역"
+        case .personalDictionary: return "개인 사전"
         case .trackpad: return "트랙패드"
         case .general: return "일반·정보"
         }
@@ -67,6 +69,7 @@ public enum InputMatePage: Int, CaseIterable, Identifiable {
         switch self {
         case .appLanguage: return "globe"
         case .koreanTypo: return "character.textbox"
+        case .personalDictionary: return "character.book.closed"
         case .trackpad: return "hand.raised"
         case .general: return "gearshape"
         }

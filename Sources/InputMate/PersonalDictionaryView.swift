@@ -3,37 +3,16 @@ import SwiftUI
 // 개인 변환 사전: 직접 추가한 단어와 성공한 수동 변환('') 결과를 추가·수정·삭제하는 설정 항목. 목록은 이 Mac에만 저장된다.
 @MainActor
 struct PersonalDictionaryView: View {
-    @ObservedObject private var store = PersonalDictionaryStore.shared
-    @State private var showsSheet = false
-
-    init() {}
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("개인 변환 사전 (\(store.entries.count)개)")
-                Spacer()
-                Button("사전 열기…") { showsSheet = true }
-            }
-            Text("단어를 직접 추가·수정·삭제할 수 있고, '' 변환이 성공하면 자동으로도 저장됩니다. 이 Mac에만 저장되며, 다음부터 같은 단어는 저장된 표현을 먼저 적용합니다.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .sheet(isPresented: $showsSheet) {
-            PersonalDictionarySheet(store: store)
-        }
-    }
-}
-
-@MainActor
-private struct PersonalDictionarySheet: View {
     @ObservedObject var store: PersonalDictionaryStore
-    @Environment(\.dismiss) private var dismiss
     @State private var selection: String?
     @State private var sourceDraft = ""
     @State private var replacementDraft = ""
     @State private var notice: (text: String, isError: Bool)?
     @State private var deleteTarget: String?
+
+    init(store: PersonalDictionaryStore = .shared) {
+        self.store = store
+    }
 
     private var sortedSources: [String] {
         store.entries.keys.sorted()
@@ -101,15 +80,8 @@ private struct PersonalDictionarySheet: View {
                         .disabled(selection == nil && sourceDraft.isEmpty && replacementDraft.isEmpty)
                 }
             }
-
-            HStack {
-                Spacer()
-                Button("닫기") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
         }
-        .padding(20)
-        .frame(width: 480)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .alert("이 단어를 삭제할까요?", isPresented: Binding(
             get: { deleteTarget != nil },
             set: { if !$0 { deleteTarget = nil } }

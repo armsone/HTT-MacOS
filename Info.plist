@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>BarobogiBuildStamp</key>
-	<string>202611010011</string>
+	<string>202611020001</string>
 	<key>CFBundleDisplayName</key>
 	<string>HTT</string>
 	<key>CFBundleDocumentTypes</key>
@@ -45,9 +45,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.1.1</string>
+	<string>1.1.2</string>
 	<key>CFBundleVersion</key>
-	<string>202611010011</string>
+	<string>202611020001</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
