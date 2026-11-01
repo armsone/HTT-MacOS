@@ -166,18 +166,22 @@ struct InputMateSettingsView: View {
 
     private var personalDictionarySettings: some View {
         ScrollView {
-            Form {
-                Section("개인 사전") {
-                    Toggle("개인 사전 사용", isOn: preferenceBinding(\.personalDictionaryEnabled))
-                    Toggle("교정 단어 자동 학습", isOn: preferenceBinding(\.personalDictionaryAutoLearnEnabled))
-                        .disabled(!settings.preferences.personalDictionaryEnabled)
-
-                    PersonalDictionaryView()
-                        .padding(.vertical, 4)
+            VStack(alignment: .leading, spacing: 16) {
+                GroupBox("개인 사전 설정") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle("개인 사전 사용", isOn: preferenceBinding(\.personalDictionaryEnabled))
+                        Toggle("교정 단어 자동 학습", isOn: preferenceBinding(\.personalDictionaryAutoLearnEnabled))
+                            .disabled(!settings.preferences.personalDictionaryEnabled)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(4)
                 }
+
+                PersonalDictionaryView()
             }
-            .formStyle(.grouped)
-            .padding(.horizontal, 4)
+            .frame(maxWidth: 800, alignment: .leading)
+            .padding(4)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

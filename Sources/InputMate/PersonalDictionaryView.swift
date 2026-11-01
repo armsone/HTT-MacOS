@@ -10,12 +10,20 @@ struct PersonalDictionaryView: View {
     @State private var notice: (text: String, isError: Bool)?
     @State private var deleteTarget: String?
 
-    init(store: PersonalDictionaryStore = .shared) {
+    init() {
+        self.store = .shared
+    }
+
+    init(store: PersonalDictionaryStore) {
         self.store = store
     }
 
-    private var sortedSources: [String] {
-        store.entries.keys.sorted()
+    private var registeredSources: [String] {
+        store.entries.keys.filter { store.origin(for: $0) != .automatic }.sorted()
+    }
+
+    private var learnedSources: [String] {
+        store.entries.keys.filter { store.origin(for: $0) == .automatic }.sorted()
     }
 
     // 목록에 실제로 있는 선택 항목만 수정·삭제 대상으로 본다.
@@ -23,63 +31,70 @@ struct PersonalDictionaryView: View {
         selection.flatMap { store.entries[$0] != nil ? $0 : nil }
     }
 
-    private var selectionBinding: Binding<String?> {
-        Binding(get: { selection }, set: { select($0) })
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("개인 변환 사전")
                 .font(.headline)
-            Text("직접 추가한 단어와 '' 변환으로 자동 저장된 단어가 함께 보입니다. 입력 내용은 이 Mac 밖으로 보내지 않으며, 바로 앞의 한 단어가 '원래 단어'와 똑같을 때만(대소문자 구분) 저장된 표현을 먼저 적용합니다.")
+            Text("직접 추가·수정한 단어와 이전부터 있던 단어는 등록단어, 자동으로 저장된 단어는 학습단어입니다. 입력 내용은 이 Mac 밖으로 보내지 않으며, 바로 앞의 한 단어가 '원래 단어'와 똑같을 때만(대소문자 구분) 저장된 표현을 먼저 적용합니다.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if store.entries.isEmpty {
-                Text("아직 저장된 단어가 없습니다. 아래에 첫 단어를 입력하고 '추가'를 누르세요.")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 80)
-            } else {
-                List(sortedSources, id: \.self, selection: selectionBinding) { source in
-                    HStack {
-                        Text(source)
-                        Image(systemName: "arrow.right")
-                            .foregroundStyle(.secondary)
-                        Text(store.entries[source] ?? "")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .frame(minHeight: 160)
-            }
+            dictionarySection("등록단어 (\(registeredSources.count))", sources: registeredSources, emptyMessage: "아직 등록단어가 없습니다.")
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text(selectedSource == nil ? "새 단어 추가" : "선택한 단어 수정")
                     .font(.subheadline.weight(.semibold))
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("원래 단어")
-                    TextField("예: 한병기", text: $sourceDraft)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("원래 단어 (예: 한병기)", text: $sourceDraft)
                         .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .accessibilityLabel("원래 단어")
                 }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text("바꿀 표현")
-                    TextField("예: Han byoungki", text: $replacementDraft)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField("바꿀 표현 (예: Han byoungki)", text: $replacementDraft)
                         .textFieldStyle(.roundedBorder)
+                        .labelsHidden()
+                        .accessibilityLabel("바꿀 표현")
                 }
+
                 if let notice {
                     Text(notice.text)
                         .font(.caption)
                         .foregroundStyle(notice.isError ? Color.red : Color.secondary)
                 }
-                HStack {
-                    Button("추가", action: add)
-                    Button("수정 저장", action: update)
+
+                HStack(spacing: 8) {
+                    Button("새로입력") {
+                        select(nil)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isNewInputDisabled)
+
+                    Button("저장") {
+                        if selectedSource == nil {
+                            add()
+                        } else {
+                            update()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isSaveDisabled)
+
+                    Button("삭제", role: .destructive) { requestDelete() }
+                        .buttonStyle(.bordered)
                         .disabled(selectedSource == nil)
-                    Button("삭제…", role: .destructive) { requestDelete() }
-                        .disabled(selectedSource == nil)
-                    Button("새로 입력") { select(nil) }
-                        .disabled(selection == nil && sourceDraft.isEmpty && replacementDraft.isEmpty)
                 }
             }
+
+            dictionarySection("학습단어 (\(learnedSources.count))", sources: learnedSources, emptyMessage: "아직 학습단어가 없습니다.")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .alert("이 단어를 삭제할까요?", isPresented: Binding(
@@ -93,6 +108,69 @@ struct PersonalDictionaryView: View {
                 Text("'\(target) → \(store.entries[target] ?? "")' 항목이 이 Mac의 사전에서 지워집니다.")
             }
         }
+    }
+
+    private var isNewInputDisabled: Bool {
+        selectedSource == nil && sourceDraft.isEmpty && replacementDraft.isEmpty
+    }
+
+    private var isSaveDisabled: Bool {
+        if trimmed(sourceDraft).isEmpty || trimmed(replacementDraft).isEmpty {
+            return true
+        }
+        if let original = selectedSource {
+            let unchanged = trimmed(sourceDraft) == original && replacementDraft == (store.entries[original] ?? "")
+            return unchanged && store.origin(for: original) != .automatic
+        }
+        return false
+    }
+
+    private func dictionarySection(_ title: String, sources: [String], emptyMessage: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            if sources.isEmpty {
+                if let emptyMessage {
+                    Text(emptyMessage)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                }
+            } else {
+                VStack(spacing: 2) {
+                    ForEach(sources, id: \.self) { source in
+                        entryRow(source)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func entryRow(_ source: String) -> some View {
+        let isSelected = selectedSource == source
+        Button {
+            select(source)
+        } label: {
+            HStack {
+                Text(source)
+                    .foregroundStyle(.primary)
+                Image(systemName: "arrow.right")
+                    .foregroundStyle(.secondary)
+                Text(store.entries[source] ?? "")
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // 선택을 바꾸면 입력칸을 그 항목 값으로 채운다(nil이면 비운다). 첫 클릭과 추가·수정·삭제 직후 모두 이 경로를 쓴다.
