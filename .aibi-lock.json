@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "repositories": {
     "mailtranslator-macos": {
-      "version": "0.5.5",
+      "version": "0.5.6",
       "files": {
         "Sources/AIBIMacEngine.swift": {
-          "sha256": "cb8dde9b09e3f722990fcbb365ba7c0872c66b158cf563c00be8916fbc2a1abd",
+          "sha256": "7dc115e159b50bd8c11c273515fea9bc22c8e1efb7299521de45b943e9c9bb2e",
           "source": "profiles/mailtranslator/distribution/macos/AIBIMacEngine.swift"
         },
         "Sources/AIBIDiagnosticsStore.swift": {
@@ -13,7 +13,7 @@
           "source": "profiles/mailtranslator/distribution/macos/AIBIDiagnosticsStore.swift"
         },
         "Sources/AISettingsView.swift": {
-          "sha256": "dbc37b9db8a669f466b165981a3d4f98424fa83fcd80df708ea9737c6be2c19e",
+          "sha256": "890f6333223ee1faa1519a4fa51989f5abab9ac899e179315d76b61a3ac1beaf",
           "source": "profiles/mailtranslator/distribution/macos/AISettingsView.swift"
         },
         "Resources/aibi-browser-runtime.js": {
@@ -28,5 +28,5 @@
     }
   },
   "consumer": "mailtranslator",
-  "aibiVersion": "0.5.5"
+  "aibiVersion": "0.5.6"
 }
