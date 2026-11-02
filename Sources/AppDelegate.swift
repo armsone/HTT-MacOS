@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let updater = UpdaterManager()
     private var hotKey: GlobalHotKey?
     private var mailHotKey: GlobalHotKey?
+    private var browserHotKey: GlobalHotKey?
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -63,6 +64,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mailHotKey.register()
         self.mailHotKey = mailHotKey
 
+        // 브라우저 열기 전역 단축키(⇧⌃⌥⌘B). 다른 앱에서도 HTT 브라우저를 열거나 이미 열려 있으면 앞으로 가져온다.
+        // 다른 앱과 키가 겹치면 등록되지 않으며, 그 사실을 상태 메뉴와 경고에 표시한다(다른 앱 설정은 바꾸지 않는다).
+        let browserHotKey = GlobalHotKey(keyCode: UInt32(kVK_ANSI_B), id: GlobalHotKey.browserHotKeyID,
+                                         display: GlobalHotKey.browserDisplayString) {
+            EmbeddedBrowser.open()
+        }
+        browserHotKey.register()
+        self.browserHotKey = browserHotKey
+        if !browserHotKey.isRegistered, case .idle = viewModel.status {
+            viewModel.status = .error(browserHotKey.statusDescription)
+        }
+
         // 메일 번역: Mail › 서비스 메뉴, Mail 위 번역 버튼(기본 켜짐)
         MailWindowCoordinator.shared.start()
 
@@ -80,6 +93,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // 모든 실행 경로(콜드/수동/로그인/브라우저)에서 화면 번역 창은 자동으로 띄우지 않는다.
         // 메뉴·단축키에서만 화면 번역 창을 연다. Dock/Finder 재실행도 숨김 상태를 유지한다.
+    }
+
+    /// 업데이트 설치가 예약된 상태에서 HTT 안의 번역 브라우저(HTD)가 실행 중이면 종료를 멈춘다.
+    /// Sparkle은 앱이 종료되는 순간(applicationWillTerminate 이후) 설치를 시작하므로, 그 전인 이 단계에서만 막을 수 있다.
+    /// HTD나 받는 중인 파일은 건드리지 않는다. 사용자가 HTD를 직접 종료한 뒤 다시 종료하면 정상 종료·설치된다.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard updater.hasPendingInstall, EmbeddedBrowser.isEmbeddedRunning() else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "HTT 브라우저를 먼저 종료해 주세요"
+        alert.informativeText = "업데이트 설치가 예약되어 있어, HTT를 종료하면 실행 중인 HTT 브라우저의 다운로드가 끊길 수 있습니다. 받는 중인 파일이 끝나면 브라우저를 종료한 뒤 HTT를 다시 종료해 주세요. 브라우저는 자동으로 종료하지 않습니다."
+        alert.addButton(withTitle: "확인")
+        alert.runModal()
+        return .terminateCancel
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -107,6 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AppModel.shared.closeDocument()
         hotKey?.unregister()
         mailHotKey?.unregister()
+        browserHotKey?.unregister()
         overlay.stopMonitoring()
         overlay.hide()
     }
@@ -170,7 +197,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let button = item.button {
             // 메뉴 막대 아이콘은 SF Symbol 대신 기존 디자인된 앱 아이콘을 그대로 축소해 쓴다(원본 색 유지).
             button.image = menuBarIconImage()
-            button.toolTip = "HTT (화면 \(GlobalHotKey.displayString) · 메일 \(GlobalHotKey.mailDisplayString))"
+            button.toolTip = "HTT (화면 \(GlobalHotKey.displayString) · 메일 \(GlobalHotKey.mailDisplayString) · 브라우저 \(GlobalHotKey.browserDisplayString))"
         }
         let menu = NSMenu()
         menu.delegate = self
@@ -220,6 +247,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applyKeyEquivalent(mailItem, GlobalHotKey.mailKeyEquivalent, GlobalHotKey.mailModifierMask)
         menu.addItem(mailItem)
         menu.addItem(item("메일·이미지 번역 열기", #selector(showMailWindow), symbol: "envelope.open"))
+        let browserItem = item("브라우저 열기", #selector(openEmbeddedBrowser), symbol: "safari")
+        applyKeyEquivalent(browserItem, GlobalHotKey.browserKeyEquivalent, GlobalHotKey.browserModifierMask)
+        menu.addItem(browserItem)
         menu.addItem(item("브라우저 번역", #selector(showBrowserSetup), symbol: "globe"))
 
         menu.addItem(.separator())
@@ -279,7 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// 실패·조치 필요 상태만 눈에 띄게 올린다(정상일 때는 표시하지 않는다).
     private func actionNeededWarningItem() -> NSMenuItem? {
-        let hotKeyFailed = hotKey?.isRegistered == false || mailHotKey?.isRegistered == false
+        let hotKeyFailed = hotKey?.isRegistered == false || mailHotKey?.isRegistered == false || browserHotKey?.isRegistered == false
         let loginNeedsApproval = loginItem.status == .requiresApproval
         let inputNeedsAccessibility = InputMateCoordinator.shared.settings.preferences.isEnabled &&
             InputMateCoordinator.shared.appState.serviceStatus == .needsAccessibility
@@ -303,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.autoenablesItems = false
         submenu.addItem(info("화면 번역 단축키: \(hotKey?.statusDescription ?? "없음")"))
         submenu.addItem(info("메일 번역 단축키: \(mailHotKey?.statusDescription ?? "없음")"))
+        submenu.addItem(info("브라우저 열기 단축키: \(browserHotKey?.statusDescription ?? "없음")"))
         submenu.addItem(.separator())
         submenu.addItem(info("로그인 항목: \(loginItem.lastError ?? loginItem.statusDescription)"))
         if loginItem.status == .requiresApproval {
@@ -393,6 +424,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showSettings() {
         MailWindowCoordinator.shared.showWorkbench(section: .general)
+    }
+
+    @objc private func openEmbeddedBrowser() {
+        EmbeddedBrowser.open()
     }
 
     @objc private func showBrowserSetup() {
@@ -559,6 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "loginItemError=\(loginItem.lastError ?? "none")",
             "hotKey=\(hotKey?.statusDescription ?? "none")",
             "mailHotKey=\(mailHotKey?.statusDescription ?? "none")",
+            "browserHotKey=\(browserHotKey?.statusDescription ?? "none")",
             "mailToolbarButton=\(MailToolbarButton.shared.isEnabled)",
             "translationBackend=\(TranslationBackendStore.shared.backend.rawValue)",
             "browserBridgeEnabled=\(BrowserIntegration.shared.isEnabled) launchedByBrowser=\(BrowserIntegration.shared.launchedByBrowser)",

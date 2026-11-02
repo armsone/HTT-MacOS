@@ -3,6 +3,9 @@
 # 사용법: ./build.sh
 #   SIGN_IDENTITY  : 서명 인증서 SHA1 (기본: 기존 Developer ID Application, 팀 T7B4EPLHPK)
 #   SIGN_TIMESTAMP : 1이면 보안 타임스탬프 포함(배포/공증용, 네트워크 필요)
+#   HTD_APP_SOURCE : HTT 안에 넣을 서명 완료된 HTD.app 경로
+#                    (기본: ../HTD/dist/install-*/HTD.app 중 가장 높은 버전)
+#   HTD_EXPECTED_TEAM : HTD의 개발자 서명 팀(기본: T7B4EPLHPK)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -193,6 +196,40 @@ if [ -d "$ROOT_DIR/Resources/InterfaceIcons" ]; then
 fi
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 
+# 번역 브라우저(HTD): 이미 서명된 HTD.app을 그대로(서명·공증 티켓 변경 없이) Contents/Helpers에 넣는다.
+# 바깥 HTT 서명 전에 넣으며, 올바른 HTD가 없으면 빌드를 멈춘다.
+HTD_EXPECTED_ID="com.hanstree.HttpsDown"
+HTD_EXPECTED_TEAM="${HTD_EXPECTED_TEAM:-T7B4EPLHPK}"
+if [ -z "${HTD_APP_SOURCE:-}" ]; then
+  HTD_APP_SOURCE="$(ls -d "$ROOT_DIR"/../HTD/dist/install-*/HTD.app 2>/dev/null | sort -V | tail -1 || true)"
+fi
+if [ -z "$HTD_APP_SOURCE" ] || [ ! -d "$HTD_APP_SOURCE" ]; then
+  echo "오류: 포함할 HTD.app을 찾지 못했습니다. HTD_APP_SOURCE=<서명된 HTD.app 경로>를 지정하세요." >&2
+  exit 1
+fi
+HTD_PLIST="$HTD_APP_SOURCE/Contents/Info.plist"
+htd_value() { /usr/libexec/PlistBuddy -c "Print :$1" "$HTD_PLIST" 2>/dev/null || true; }
+HTD_EXEC="$HTD_APP_SOURCE/Contents/MacOS/$(htd_value CFBundleExecutable)"
+if [ "$(htd_value CFBundleIdentifier)" != "$HTD_EXPECTED_ID" ] || [ ! -x "$HTD_EXEC" ] \
+   || [ -z "$(htd_value CFBundleShortVersionString)" ] || [ -z "$(htd_value CFBundleVersion)" ] \
+   || [ -z "$(htd_value LSMinimumSystemVersion)" ]; then
+  echo "오류: $HTD_APP_SOURCE 는 올바른 HTD 앱이 아닙니다 (식별자·실행 파일·버전·최소 macOS 확인)." >&2
+  exit 1
+fi
+if ! lipo -archs "$HTD_EXEC" | tr ' ' '\n' | grep -x "$(uname -m)" >/dev/null; then
+  echo "오류: HTD 실행 파일이 이 빌드의 아키텍처($(uname -m))를 지원하지 않습니다." >&2
+  exit 1
+fi
+if ! codesign --verify --strict "$HTD_APP_SOURCE" 2>/dev/null \
+   || ! codesign -dv "$HTD_APP_SOURCE" 2>&1 | grep -x "TeamIdentifier=$HTD_EXPECTED_TEAM" >/dev/null; then
+  echo "오류: HTD.app 서명이 올바르지 않거나 팀($HTD_EXPECTED_TEAM)이 다릅니다." >&2
+  exit 1
+fi
+echo "==> HTD 포함: $HTD_APP_SOURCE (버전 $(htd_value CFBundleShortVersionString), 빌드 $(htd_value CFBundleVersion))"
+mkdir -p "$APP_BUNDLE/Contents/Helpers"
+ditto "$HTD_APP_SOURCE" "$APP_BUNDLE/Contents/Helpers/HTD.app"
+HTD_CDHASH_BEFORE="$(codesign -dvvv "$APP_BUNDLE/Contents/Helpers/HTD.app" 2>&1 | grep '^CDHash=')"
+
 PLIST="$APP_BUNDLE/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :SUFeedURL $SPARKLE_FEED_URL" "$PLIST"
 PUBLIC_KEY_FILE="$ROOT_DIR/Resources/UpdatePublicKey.txt"
@@ -236,4 +273,9 @@ plutil -lint "$ENTITLEMENTS" >/dev/null
 codesign "${SIGN_ARGS[@]}" --entitlements "$ENTITLEMENTS" --identifier "$BUNDLE_ID" "$APP_BUNDLE"
 
 codesign --verify --deep --strict "$APP_BUNDLE"
+# 포함한 HTD는 바깥 서명 과정에서 바뀌지 않아야 한다.
+if [ "$(codesign -dvvv "$APP_BUNDLE/Contents/Helpers/HTD.app" 2>&1 | grep '^CDHash=')" != "$HTD_CDHASH_BEFORE" ]; then
+  echo "오류: 포함한 HTD.app의 서명이 빌드 중 바뀌었습니다." >&2
+  exit 1
+fi
 echo "==> 빌드 완료: $APP_BUNDLE"

@@ -1,8 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
 
-/// Carbon RegisterEventHotKey로 등록하는 전역 단축키 하나. 화면 번역(⌃⌥⇧⌘T)과
-/// 선택한 메일 번역(⌃⌥⇧⌘M)이 각자 인스턴스를 가지며, 등록 실패(다른 앱과 충돌)와 해제를 따로 처리한다.
+/// Carbon RegisterEventHotKey로 등록하는 전역 단축키 하나. 화면 번역(⌃⌥⇧⌘T), 선택한 메일 번역(⌃⌥⇧⌘M),
+/// 브라우저 열기(⇧⌃⌥⌘B)가 각자 인스턴스를 가지며, 등록 실패(다른 앱과 충돌)와 해제를 따로 처리한다.
 /// 모든 키를 감시하지 않으므로 손쉬운 사용/입력 모니터링 권한이 필요 없다.
 /// 콜백에는 자기 자신을 unretained로 넘기므로, 소유자(AppDelegate)가 앱 수명 동안
 /// 이 객체를 강하게 붙잡고 종료 시 unregister()를 호출해야 한다.
@@ -10,17 +10,21 @@ import Carbon.HIToolbox
 final class GlobalHotKey {
     nonisolated static let displayString = "⌃⌥⇧⌘T"
     nonisolated static let mailDisplayString = "⌃⌥⇧⌘M"
+    nonisolated static let browserDisplayString = "⇧⌃⌥⌘B"
 
     /// 메뉴 항목 keyEquivalent 표기용(실제 등록은 Carbon RegisterEventHotKey로 별도 수행됨)
     nonisolated static let screenKeyEquivalent = "t"
     nonisolated static let mailKeyEquivalent = "m"
+    nonisolated static let browserKeyEquivalent = "b"
     nonisolated static let hotKeyModifierMask: NSEvent.ModifierFlags = [.control, .option, .shift, .command]
     nonisolated static let screenModifierMask = hotKeyModifierMask
     nonisolated static let mailModifierMask = hotKeyModifierMask
+    nonisolated static let browserModifierMask = hotKeyModifierMask
 
     private static let signature: OSType = 0x5354_524E // 'STRN'
     nonisolated static let screenHotKeyID: UInt32 = 1
     nonisolated static let mailHotKeyID: UInt32 = 2
+    nonisolated static let browserHotKeyID: UInt32 = 3
 
     private var hotKeyRef: EventHotKeyRef?
     private var handlerRef: EventHandlerRef?

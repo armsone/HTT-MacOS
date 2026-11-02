@@ -94,7 +94,8 @@ private func parentProcessPath(for pid: pid_t) -> String? {
     }
 }
 
-private func verifyHTDParentProcess(ppid: pid_t) -> Bool {
+/// 기존 독립 설치(/Applications/HTD.app) 경로 검증 — 변경 없음.
+private func verifyStandaloneHTDParent(ppid: pid_t) -> Bool {
     guard ppid > 1 else { return false }
 
     // 1) 부모 프로세스 경로 및 표준화 경로 확인
@@ -156,6 +157,75 @@ private func verifyHTDParentProcess(ppid: pid_t) -> Bool {
     }
 
     return true
+}
+
+private let htdBundleID = "com.hanstree.HttpsDown"
+
+/// 이 도우미 자신의 실제 실행 경로(커널이 알려 주는 경로). 호출자 입력·argv에 의존하지 않는다.
+private func ownExecutablePath() -> String? {
+    guard let path = parentProcessPath(for: getpid()), !path.isEmpty else { return nil }
+    return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+}
+
+private func requirementCheck(_ text: String, code: SecStaticCode) -> Bool {
+    var requirement: SecRequirement?
+    guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess,
+          let requirement else { return false }
+    return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSStrictValidate), requirement) == errSecSuccess
+}
+
+/// HTT.app/Contents/Helpers/HTD.app 안에서 실행 중인 HTD만 허용한다.
+/// 기준은 이 도우미가 들어 있는 (서명 검증된) 바깥 HTT 번들이며, 부모 프로세스의 실제 실행 파일이
+/// 그 번들의 Contents/Helpers/HTD.app/Contents/MacOS/HTD와 정확히 같아야 한다. 같은 팀 Developer ID 서명 필수(ad hoc 불가).
+private func verifyEmbeddedHTDParent(ppid: pid_t) -> Bool {
+    guard let teamID = BrowserCodeSigning.ownTeamID(),
+          !teamID.isEmpty, teamID.allSatisfy({ $0.isLetter || $0.isNumber }) else { return false }
+
+    // 1) 도우미 실제 경로 → …/HTT.app/Contents/Helpers/SMTBrowserHost 형태여야 한다.
+    guard let helperPath = ownExecutablePath() else { return false }
+    let helperURL = URL(fileURLWithPath: helperPath)
+    guard helperURL.lastPathComponent == "SMTBrowserHost",
+          helperURL.deletingLastPathComponent().lastPathComponent == "Helpers",
+          helperURL.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "Contents" else { return false }
+    let outerURL = helperURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    guard outerURL.pathExtension == "app",
+          Bundle(url: outerURL)?.bundleIdentifier == BrowserBridge.appBundleID else { return false }
+
+    // 2) 바깥 HTT 서명: 같은 팀 + 전체 번들 식별자
+    var outerStatic: SecStaticCode?
+    guard SecStaticCodeCreateWithPath(outerURL as CFURL, [], &outerStatic) == errSecSuccess, let outerStatic,
+          requirementCheck("anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\" and identifier \"\(BrowserBridge.appBundleID)\"", code: outerStatic) else { return false }
+
+    // 3) 부모 실행 파일 경로는 바깥 번들 안의 정확한 HTD 경로(심볼릭 링크 없음)여야 한다.
+    let expectedPath = outerURL.appendingPathComponent("Contents/Helpers/HTD.app/Contents/MacOS/HTD").path
+    guard URL(fileURLWithPath: expectedPath).resolvingSymlinksInPath().path == expectedPath,
+          let rawParent = parentProcessPath(for: ppid),
+          URL(fileURLWithPath: rawParent).resolvingSymlinksInPath().path == expectedPath,
+          rawParent == expectedPath else { return false }
+    let htdAppURL = outerURL.appendingPathComponent("Contents/Helpers/HTD.app", isDirectory: true)
+    guard Bundle(url: htdAppURL)?.bundleIdentifier == htdBundleID else { return false }
+
+    // 4) 부모 프로세스 동적 서명: 같은 팀 Developer ID + HTD 식별자, 그리고 정적 서명 식별자 일치
+    var guest: SecCode?
+    guard SecCodeCopyGuestWithAttributes(nil, [kSecGuestAttributePid as String: NSNumber(value: ppid)] as CFDictionary, [], &guest) == errSecSuccess,
+          let guest else { return false }
+    var requirement: SecRequirement?
+    guard SecRequirementCreateWithString("anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\" and identifier \"\(htdBundleID)\"" as CFString, [], &requirement) == errSecSuccess,
+          let requirement,
+          SecCodeCheckValidity(guest, [], requirement) == errSecSuccess else { return false }
+    var staticCode: SecStaticCode?
+    guard SecCodeCopyStaticCode(guest, [], &staticCode) == errSecSuccess, let staticCode else { return false }
+    var info: CFDictionary?
+    guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+          let dict = info as? [String: Any],
+          dict[kSecCodeInfoIdentifier as String] as? String == htdBundleID,
+          dict[kSecCodeInfoTeamIdentifier as String] as? String == teamID else { return false }
+    return true
+}
+
+private func verifyHTDParentProcess(ppid: pid_t) -> Bool {
+    guard ppid > 1 else { return false }
+    return verifyEmbeddedHTDParent(ppid: ppid) || verifyStandaloneHTDParent(ppid: ppid)
 }
 
 let origin = CommandLine.arguments.dropFirst().first ?? ""

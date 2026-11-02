@@ -194,6 +194,13 @@ public struct HTTHomeView: View {
                             .font(.subheadline)
                             .foregroundStyle(palette.text2)
                     }
+                    HStack {
+                        Text("번역 브라우저:")
+                            .font(.subheadline.bold())
+                        Text("HTT에 들어 있는 브라우저입니다. 원문으로 시작하며, 직접 번역을 누르면 번역하고 원문으로 돌아가거나 종료할 때까지 유지합니다. 받은 파일은 그대로 보관됩니다. 전역 단축키 \(GlobalHotKey.browserDisplayString)로도 열 수 있습니다.")
+                            .font(.subheadline)
+                            .foregroundStyle(palette.text2)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -210,6 +217,9 @@ public struct HTTHomeView: View {
                     }
                     HStack {
                         Spacer()
+                        Button("브라우저 열기") {
+                            EmbeddedBrowser.open()
+                        }
                         Button("브라우저 번역 설정") {
                             settingsStore.section = .browser
                         }
