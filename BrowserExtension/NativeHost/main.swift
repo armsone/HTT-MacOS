@@ -2,6 +2,7 @@ import AppKit
 import CoreFoundation
 import Darwin
 import Foundation
+import Security
 
 // SMTBrowserHost — Chrome·Whale 네이티브 메시징 호스트(Barobogi.app/Contents/Helpers 안).
 // 브라우저가 확장의 connectNative로 실행한다. 직접 번역하지 않고, 같은 팀으로 서명된 Barobogi 앱의
@@ -62,10 +63,109 @@ func launchContainingApp() -> Bool {
     return launched
 }
 
-// 1) 출처 확인 — Chrome/Whale은 첫 인자로 호출한 확장의 출처를 넘긴다.
+// 1) 출처 확인 — Chrome/Whale/HTD 확장은 첫 인자로 호출한 확장의 출처를 넘긴다.
+@_silgen_name("proc_pidpath")
+private func system_proc_pidpath(_ pid: Int32, _ buffer: UnsafeMutableRawPointer, _ buffersize: UInt32) -> Int32
+
+private func parentProcessPath(for pid: pid_t) -> String? {
+    var buffer = [CChar](repeating: 0, count: 4096)
+    let length = buffer.withUnsafeMutableBytes { raw in
+        system_proc_pidpath(pid, raw.baseAddress!, UInt32(raw.count))
+    }
+    if length > 0 {
+        return String(cString: buffer)
+    }
+
+    var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+    var size: Int = 0
+    guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else {
+        return nil
+    }
+    var procBuffer = [CChar](repeating: 0, count: size)
+    guard sysctl(&mib, 3, &procBuffer, &size, nil, 0) == 0 else {
+        return nil
+    }
+    procBuffer[size - 1] = 0
+    let offset = MemoryLayout<Int32>.size
+    guard size > offset else { return nil }
+    return procBuffer.withUnsafeBufferPointer { ptr in
+        guard let base = ptr.baseAddress else { return nil }
+        return String(cString: base.advanced(by: offset))
+    }
+}
+
+private func verifyHTDParentProcess(ppid: pid_t) -> Bool {
+    guard ppid > 1 else { return false }
+
+    // 1) 부모 프로세스 경로 및 표준화 경로 확인
+    guard let parentPath = parentProcessPath(for: ppid), !parentPath.isEmpty else {
+        return false
+    }
+    let expectedExecutable = "/Applications/HTD.app/Contents/MacOS/HTD"
+    let canonicalExpected = URL(fileURLWithPath: expectedExecutable).resolvingSymlinksInPath().path
+    let canonicalParent = URL(fileURLWithPath: parentPath).resolvingSymlinksInPath().path
+    guard canonicalParent == expectedExecutable || canonicalParent == canonicalExpected else {
+        return false
+    }
+
+    // 2) 번들 식별자 확인 (앱 번들 Info.plist)
+    let appURL = URL(fileURLWithPath: canonicalParent)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    guard let bundle = Bundle(url: appURL),
+          bundle.bundleIdentifier == "com.hanstree.HttpsDown" else {
+        return false
+    }
+
+    // 3) SecCode API를 통한 부모 프로세스 코드 서명 및 식별자 유효성 검증
+    var guest: SecCode?
+    let attributes: [String: Any] = [
+        kSecGuestAttributePid as String: NSNumber(value: ppid)
+    ]
+    guard SecCodeCopyGuestWithAttributes(nil, attributes as CFDictionary, [], &guest) == errSecSuccess,
+          let guest else {
+        return false
+    }
+
+    // ad-hoc 서명을 지원하기 위해 Developer ID 앵커를 강제하지 않고, 코드 유효성과 식별자를 검증
+    let requirementText = "identifier \"com.hanstree.HttpsDown\""
+    var requirement: SecRequirement?
+    guard SecRequirementCreateWithString(requirementText as CFString, [], &requirement) == errSecSuccess,
+          let requirement else {
+        return false
+    }
+
+    guard SecCodeCheckValidity(guest, [], requirement) == errSecSuccess else {
+        return false
+    }
+
+    // 정적 서명 정보의 식별자도 추가 확인
+    var staticCode: SecStaticCode?
+    guard SecCodeCopyStaticCode(guest, [], &staticCode) == errSecSuccess, let staticCode else {
+        return false
+    }
+    var info: CFDictionary?
+    guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+          let dict = info as? [String: Any] else {
+        return false
+    }
+    guard let signingIdentifier = dict[kSecCodeInfoIdentifier as String] as? String,
+          signingIdentifier == "com.hanstree.HttpsDown" else {
+        return false
+    }
+
+    return true
+}
+
 let origin = CommandLine.arguments.dropFirst().first ?? ""
 guard BrowserBridge.allowedOrigins.contains(origin) else {
     fail("origin_not_allowed", "허용되지 않은 확장에서 호출했습니다.")
+}
+if origin == BrowserBridge.htdOrigin {
+    guard verifyHTDParentProcess(ppid: getppid()) else {
+        fail("unauthorized_parent", "허용되지 않은 부모 프로세스에서 HTD 전용 출처를 호출했습니다.")
+    }
 }
 guard let teamID = BrowserCodeSigning.ownTeamID() else {
     fail("unsigned_helper", "HTT 브라우저 도우미가 Developer ID로 서명되지 않았습니다. 서명된 HTT를 다시 설치하세요.")

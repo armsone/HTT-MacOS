@@ -113,6 +113,24 @@ stage_extension() {
   mkdir -p "$dest/icons" "$dest/fonts" "$dest/provider-logos"
   cp "$BROWSER_DIR/shared/fx.js" "$BROWSER_DIR/shared/background.js" "$BROWSER_DIR/shared/content.js" \
      "$BROWSER_DIR/shared/popup.html" "$BROWSER_DIR/shared/popup.js" "$BROWSER_DIR/shared/popup.css" "$dest/"
+  # WKWebExtension은 외부 JS를 한국어 로케일에서 레거시 문자셋으로 읽어 한글이 깨지고 정규식이 오류를 낼 수 있다.
+  # 복사본 JS의 비ASCII 문자만 \uXXXX(UTF-16)로 바꿔 인코딩과 무관하게 같은 의미로 읽히게 한다. 원본은 UTF-8 그대로다.
+  python3 -I - "$dest/fx.js" "$dest/background.js" "$dest/content.js" "$dest/popup.js" <<'PY'
+import sys
+for path in sys.argv[1:]:
+    text = open(path, encoding="utf-8").read()
+    out = []
+    for ch in text:
+        cp = ord(ch)
+        if cp < 128:
+            out.append(ch)
+        elif cp < 0x10000:
+            out.append("\\u%04x" % cp)
+        else:
+            cp -= 0x10000
+            out.append("\\u%04x\\u%04x" % (0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF)))
+    open(path, "w", encoding="utf-8", newline="").write("".join(out))
+PY
   cp "$ICON_DIR"/icon*.png "$dest/icons/"
   # 팝업의 구글·DeepL 버튼 공식 로고(번들 안 로컬 파일, 네트워크로 받지 않음).
   cp "$BROWSER_DIR/shared/provider-logos/google-translate.png" "$BROWSER_DIR/shared/provider-logos/deepl-blue.svg" \

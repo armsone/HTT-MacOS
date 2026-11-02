@@ -16,7 +16,11 @@ enum BrowserBridge {
 
     /// 압축 해제 확장(manifest의 공개 key)에서 계산한 고정 ID. 스토어 게시 ID는 실제 게시 후에만 추가한다.
     static let chromiumExtensionIDs = ["gnadnpjfjkipjbapbnhakfebncdkidai"]
-    static var allowedOrigins: [String] { chromiumExtensionIDs.map { "chrome-extension://\($0)/" } }
+    /// 전용 HTD 네이티브 도우미 출처
+    static let htdOrigin = "htd-web-extension://com.hanstree.HttpsDown/"
+    static var allowedOrigins: [String] {
+        chromiumExtensionIDs.map { "chrome-extension://\($0)/" } + [htdOrigin]
+    }
 
     /// 도우미가 앱을 대신 실행할 때 붙이는 인자. 이 인자로 실행되면 화면 번역 창을 띄우지 않는다.
     static let launchArgument = "--browser-engine"

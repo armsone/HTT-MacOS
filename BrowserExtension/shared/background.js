@@ -17,7 +17,13 @@ if (typeof importScripts === "function" && !globalThis.BarobogiFX) {
   try { importScripts("fx.js"); } catch { /* 환율 기능만 꺼진다 */ }
 }
 const api = globalThis.browser ?? globalThis.chrome;
-const IS_SAFARI = api.runtime.getURL("").startsWith("safari-web-extension:");
+// HTD(WebKit 전용 웹 확장)는 safari-web-extension:과 달리 WebKit 원샷 메시징 transport(sendNativeMessage)를 쓰면서도
+// Chrome/Whale과 동일한 외부 1회성 번역(Google·DeepL) 기능 및 전체 웹사이트 자동 접근을 지원한다.
+// IS_SAFARI_TRANSPORT: WebKit native sendNativeMessage/cancel transport를 사용하는지 여부 (Safari 또는 HTD).
+// IS_SAFARI: 순수 Safari 브라우저 확장 환경 (safari-web-extension: 전용).
+const IS_SAFARI_TRANSPORT = /^(?:safari-web-extension|webkit-extension):/.test(api.runtime.getURL(""));
+const IS_SAFARI = /^safari-web-extension:/.test(api.runtime.getURL(""));
+const IS_HTD = /^webkit-extension:/.test(api.runtime.getURL(""));
 const HOST_NAME = "com.local.screentranslator.browser";
 const SAFARI_APP_ID = "com.local.screentranslator";
 const TARGETS = ["ko", "en", "ja", "zh-Hans", "zh-Hant"];
@@ -77,6 +83,22 @@ function originOf(url) {
   }
 }
 
+// HTD: 번역 버튼으로 켠 자동 번역은 '이번 앱 실행 동안만' 유지한다. 저장소(local)에는 쓰지 않고 storage.session(확장이 내려가거나
+// 앱이 끝나면 사라짐)에만 둔다. 이벤트 페이지가 잠들었다 깨어나도 유지되도록 변수가 아니라 session에서 읽는다.
+const HTD_SESSION_KEY = "htdSessionTranslate";
+let htdSessionFallback = false;
+
+async function readAutomatic() {
+  if (!api.storage.session) return htdSessionFallback;
+  try { return (await api.storage.session.get(HTD_SESSION_KEY))[HTD_SESSION_KEY] === true; } catch { return htdSessionFallback; }
+}
+
+async function writeAutomatic(on) {
+  if (!IS_HTD) return api.storage.local.set({ automaticEnabled: on });
+  htdSessionFallback = on;
+  if (api.storage.session) await api.storage.session.set({ [HTD_SESSION_KEY]: on });
+}
+
 async function loadSettings() {
   const stored = await api.storage.local.get(DEFAULTS);
   const engineConsents = Array.isArray(stored.engineConsents)
@@ -88,7 +110,8 @@ async function loadSettings() {
     consent: stored.consent === true,
     target: TARGETS.includes(stored.target) ? stored.target : "ko",
     images: stored.images !== false,
-    automaticEnabled: stored.automaticEnabled === true,
+    // HTD는 기본이 원문: 번역 버튼을 누른 뒤 이번 실행 동안만 켜짐(session). 저장된 local 켜짐 값은 읽지 않는다.
+    automaticEnabled: IS_HTD ? await readAutomatic() : stored.automaticEnabled === true,
     engine,
     engineConsents,
     fontStyle: FONT_STYLES.includes(stored.fontStyle) ? stored.fontStyle : "auto"
@@ -98,15 +121,17 @@ async function loadSettings() {
 // MARK: - 권한·전역 상태 세대
 
 /** 전역 자동 번역에 필요한 권한이 실제로 있는지. Chrome·Whale은 선택 권한 <all_urls> 전체 허용이어야 한다.
- * Safari는 사이트별 허용을 Safari 설정이 관리하므로 탭마다 originPermitted로 확인한다. */
+ * Safari와 HTD는 브라우저/호스트 정책으로 사이트별 또는 전역 자동 허용을 관리하므로 hasGlobalGrant가 true를 반환한다.
+ * (Safari는 originPermitted로 탭별 확인, HTD는 신뢰된 호스트 컨텍스트에서 HTTP/HTTPS 자동 허용) */
 function hasGlobalGrant() {
-  if (IS_SAFARI) return Promise.resolve(true);
+  if (IS_SAFARI || IS_HTD) return Promise.resolve(true);
   return Promise.resolve()
     .then(() => api.permissions.contains({ origins: [ALL_URLS] }))
     .then((granted) => granted === true, () => false);
 }
 
 function originPermitted(origin) {
+  if (IS_HTD) return Promise.resolve(true);
   return Promise.resolve()
     .then(() => api.permissions.contains({ origins: [`${origin}/*`] }))
     .then((granted) => granted === true, () => false);
@@ -153,6 +178,9 @@ function describeNativeFailure(raw) {
   const text = String(raw || "");
   if (IS_SAFARI) {
     return "HTT 확장 앱에 연결하지 못했습니다. HTT를 응용 프로그램 폴더에 설치해 한 번 실행하고 Safari 설정에서 확장을 켜 주세요.";
+  }
+  if (IS_HTD && text) {
+    return text.length > 300 ? `${text.slice(0, 300)}…` : text;
   }
   if (/not found/i.test(text)) {
     return "HTT 연결이 등록되지 않았습니다. HTT 메뉴 막대 › 브라우저 번역…에서 이 브라우저의 '설치 시작'을 누르세요.";
@@ -249,7 +277,7 @@ const native = {
         this.setStatus("error", text);
         reject(codedError("native_unavailable", text));
       };
-      if (IS_SAFARI) {
+      if (IS_SAFARI_TRANSPORT) {
         Promise.resolve(api.runtime.sendNativeMessage(SAFARI_APP_ID, message)).then(
           (response) => this.receive(response && typeof response === "object" ? response : { id, ok: false, code: "no_response", message: describeNativeFailure() }),
           failSend
@@ -273,7 +301,7 @@ const native = {
       entry.reject(codedError("cancelled", ""));
     }
     const message = { v: 1, type: "cancel", id };
-    if (IS_SAFARI) {
+    if (IS_SAFARI_TRANSPORT) {
       Promise.resolve(api.runtime.sendNativeMessage(SAFARI_APP_ID, message)).catch(() => {});
     } else if (this.port) {
       try { this.port.postMessage(message); } catch { /* 연결이 이미 끊김 */ }
@@ -447,9 +475,9 @@ const iconReady = (async () => {
 
 /** Chrome·Whale의 action.* 콜백 API는 탭이 막 닫혀 대상이 없을 때 lastError를 그 콜백 안에서 동기적으로
  *  읽어야 "Unchecked runtime.lastError" 경고가 없다(await로 받은 뒤 읽으면 엔진이 이미 경고를 찍은 뒤다).
- *  Safari의 browser.* action은 순수 promise라 이 패턴이 필요 없고 그대로 호출한다. 성공하면 true. */
+ *  Safari 및 WebKit 계열의 browser.* action은 순수 promise라 이 패턴이 필요 없고 그대로 호출한다. 성공하면 true. */
 function callActionApi(method, options) {
-  if (IS_SAFARI) return Promise.resolve(method(options)).then(() => true, () => false);
+  if (IS_SAFARI_TRANSPORT) return Promise.resolve(method(options)).then(() => true, () => false);
   return new Promise((resolve) => {
     method(options, () => {
       const failed = Boolean(api.runtime.lastError); // 탭이 닫혔을 수 있음: 그 자리에서 읽어 소비한다.
@@ -865,7 +893,7 @@ function deadlineSnapshot(tabId) {
 /** 이 탭 요청의 진행 프레임을 알려진 단계·개수(0~1천만 정수)만 남겨 기록하는 함수를 만든다. line·r이 있으면 그 동작 기록에
  *  단계가 바뀐 시각도 남긴다. 1회성 외부 요청이면 보안 확인 단계 출입을 한도 시계에 알린다. */
 function progressRecorder(tabId, id, kind, engine, token = null, line = null, r = 0) {
-  if (IS_SAFARI || !Number.isInteger(tabId)) return null;
+  if (IS_SAFARI_TRANSPORT || !Number.isInteger(tabId)) return null;
   return (message) => {
     if (!PROGRESS_PHASES.includes(message.phase)) return;
     const step = PROGRESS_STEPS.includes(message.step) ? message.step : null;
@@ -1393,7 +1421,7 @@ function globalStop() {
   externalPages.clear();
   clearDeadlines();
   return serially(async () => {
-    await api.storage.local.set({ automaticEnabled: false }).catch(() => {});
+    await writeAutomatic(false).catch(() => {});
     const tabs = await queryAllTabs();
     const pages = new Map();
     await Promise.all(tabs.map(async (tab) => {
@@ -1409,6 +1437,13 @@ function globalStop() {
 /** 저장된 상태와 실제 권한을 맞춘다(워커 시작·브라우저 시작·설치/업데이트·팝업 열기). 켜짐인데 동의나 전체 권한이
  * 없으면 false를 저장하고 전역으로 끈다. 반환: 지금 전역 자동 번역을 이어 가도 되는지. */
 async function reconcile() {
+  // HTD: 이전 버전이 local에 남긴 켜짐 값만 지운다. 켜짐 여부의 기준은 이번 실행의 session 값이다(앱을 다시 켜면 꺼진 상태).
+  if (IS_HTD) {
+    const legacy = await api.storage.local.get({ automaticEnabled: false }).catch(() => ({}));
+    if (legacy.automaticEnabled === true) await api.storage.local.set({ automaticEnabled: false }).catch(() => {});
+    control.armed = await readAutomatic();
+    return control.armed;
+  }
   const epoch = control.epoch;
   const verdict = await serially(async () => {
     const settings = await loadSettings();
@@ -1536,14 +1571,14 @@ async function handlePopup(message) {
       externalPages.delete(tabId);
       dropDeadline(tabId);
       let epoch = control.epoch;
-      const wantAuto = message.automatic === true;
+      const wantAuto = message.automatic === true; // HTD: 번역 버튼 이후 원문 보기·앱 종료까지 이번 실행 동안 유지(session)
       const outcome = await serially(async () => {
         if (epoch !== control.epoch) return "superseded";
         const granted = wantAuto && (await hasGlobalGrant());
         if (epoch !== control.epoch) return "superseded";
         if (granted) {
           control.armed = true;
-          await api.storage.local.set({ automaticEnabled: true });
+          await writeAutomatic(true);
           return "auto";
         }
         // tabOnly(팝업 열 때 한 번 토글)는 이 탭 하나만 수동으로 번역하려는 뜻이라, 전역 자동 번역이 이미
@@ -1722,7 +1757,7 @@ if (api.permissions?.onRemoved) {
 api.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   const consentOff = changes.consent && changes.consent.oldValue === true && changes.consent.newValue !== true;
-  const autoOff = changes.automaticEnabled && changes.automaticEnabled.newValue !== true;
+  const autoOff = !IS_HTD && changes.automaticEnabled && changes.automaticEnabled.newValue !== true;
   if (consentOff || (autoOff && control.armed)) globalStop().catch(() => {});
 });
 

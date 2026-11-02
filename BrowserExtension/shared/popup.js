@@ -5,7 +5,13 @@
 // 이미지 속 글자 번역은 항상 켜져 있다(옵션 아님).
 
 const api = globalThis.browser ?? globalThis.chrome;
-const IS_SAFARI = api.runtime.getURL("").startsWith("safari-web-extension:");
+// HTD(WebKit 전용 웹 확장)는 safari-web-extension:과 달리 외부 1회성 번역(Google·DeepL) 기능 및 전체 사이트 자동 접근을 지원한다.
+// IS_SAFARI_TRANSPORT: WebKit 기반 확장 여부.
+// IS_SAFARI: 순수 Safari 브라우저 확장 환경 (safari-web-extension: 전용 제한).
+// IS_HTD: HTD 전용 WebKit 확장 환경 (webkit-extension: 전용).
+const IS_SAFARI_TRANSPORT = /^(?:safari-web-extension|webkit-extension):/.test(api.runtime.getURL(""));
+const IS_SAFARI = /^safari-web-extension:/.test(api.runtime.getURL(""));
+const IS_HTD = /^webkit-extension:/.test(api.runtime.getURL(""));
 const ALL_URLS = "<all_urls>";
 const $ = (id) => document.getElementById(id);
 let tabId = null;
@@ -24,6 +30,16 @@ async function call(message) {
   const response = await api.runtime.sendMessage({ ...message, tabId });
   if (!response || response.ok !== true) throw new Error(response?.message || "요청을 처리하지 못했습니다.");
   return response;
+}
+
+/** HTD 전용: 호스트(HTD) 툴바의 HTT 버튼이 방금 눌렸는지 호스트에 묻는다. 호스트가 직접 답하며 한 번 답하면 지운다. */
+async function hostRequestedTranslate() {
+  try {
+    const reply = await api.runtime.sendNativeMessage("com.local.screentranslator", { v: 1, type: "htdHostIntent", id: `intent-${Date.now()}` });
+    return reply?.translate === true;
+  } catch {
+    return false;
+  }
 }
 
 function render(state) {
@@ -53,7 +69,7 @@ function render(state) {
   $("original").classList.toggle("active", !isTranslated);
   if (state.settings.automaticEnabled) {
     $("autoStatus").textContent = "자동 번역 켜짐";
-  } else if (!IS_SAFARI && !state.grant) {
+  } else if (!IS_SAFARI && !IS_HTD && !state.grant) {
     $("autoStatus").textContent = "자동 번역 꺼짐 · 접근 허용 필요";
   } else {
     $("autoStatus").textContent = "자동 번역 꺼짐";
@@ -536,8 +552,8 @@ $("fontStyle").addEventListener("change", async (event) => {
 async function runTranslate(gesture, clickedAt) {
   let permission;
   try {
-    if (IS_SAFARI) {
-      permission = Promise.resolve(true);
+    if (IS_HTD || IS_SAFARI) {
+      permission = Promise.resolve(true); // HTD: 호스트가 http/https를 이미 허용한다. 번역은 원문 보기·앱 종료까지 이번 실행 동안 유지된다.
     } else if (gesture) {
       permission = Promise.resolve(api.permissions.request({ origins: [ALL_URLS] }));
     } else {
@@ -629,7 +645,10 @@ $("original").addEventListener("click", async () => {
   try {
     const opened = await call({ cmd: "popupState" });
     // 이 문서가 1회성 Google·DeepL 번역 중이면 팝업을 다시 연 것만으로 Mac 기본 번역으로 바꾸지 않는다.
-    if (opened.settings.consent && !opened.page?.externalPage) await runTranslate(false, OPENED_AT);
+    // HTD에서는 팝업을 연 것만으로 번역하지 않는다. 호스트의 HTT 버튼·메뉴가 막 눌렸을 때만(호스트가 한 번만 알려 줌) 번역을 시작한다.
+    if (IS_HTD) {
+      if (opened.settings.consent && !opened.page?.externalPage && await hostRequestedTranslate()) await runTranslate(true, OPENED_AT);
+    } else if (opened.settings.consent && !opened.page?.externalPage) await runTranslate(false, OPENED_AT);
   } catch {
     // 실패는 조용히 무시하고 아래 refresh()가 실제 상태를 그대로 보여준다.
   }
