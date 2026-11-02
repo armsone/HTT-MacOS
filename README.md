@@ -1,4 +1,4 @@
-# HTT (Hanstree Translation & Touch Tools) v1.1.1
+# HTT (Hanstree Translation & Touch Tools) v1.1.4
 
 - **소스**: [github.com/armsone/HTT-MacOS](https://github.com/armsone/HTT-MacOS) (공개)
 - **다운로드(DMG)**: [최신 릴리스](https://github.com/armsone/HTT-MacOS/releases/latest)
@@ -32,6 +32,10 @@ macOS 15 이상용 네이티브 생산성 앱입니다. 하나의 앱 안에 다
 온디바이스 Apple Intelligence가 뜻을 바꾸지 않고 표현만 다시 다듬습니다(선택 UI 없이 자동, 아래 [번역 방식](#번역-방식) 참고).
 이 기본 경로는 외부로 아무것도 보내지 않습니다. 외부 AI(ChatGPT·Claude·Gemini)나 웹 번역기(DeepL·Google
 번역·Papago)를 직접 고르고 전송에 동의한 뒤 번역을 실행할 때만 **텍스트**가 해당 서비스로 전송됩니다.
+
+### 1.1.4 변경 사항
+
+- **한글 교정 후 입력 언어 전환 보강**: 교정 뒤 빠르게 입력하거나 입력창의 반영 확인이 늦을 때 한글 입력기 전환이 빠지던 경로를 보완했습니다. 다른 앱·입력창으로 이동하거나 보안 입력 상태에서는 전환하지 않습니다.
 
 ### 1.1.1 변경 사항
 

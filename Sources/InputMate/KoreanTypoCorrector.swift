@@ -1173,10 +1173,20 @@ final class KoreanTypoCorrector {
                 self.postKey(51, source: source)
             }
             self.postText(text, source: source)
+            // 표시를 확인하지 못했거나 다음 키 입력으로 확인이 끊겨도, 같은 앱·포커스·보안 상태가 유지되면 입력기만 넘긴다.
+            @MainActor func handOffToKorean() {
+                guard self.isEnabled, self.generation == expectedGeneration,
+                      NSWorkspace.shared.frontmostApplication?.processIdentifier == applicationPID,
+                      !IsSecureEventInputEnabled(), !self.focusedElementIsSecureTextField else { return }
+                if let focusedElement, !self.hasSameFocus(as: focusedElement) { return }
+                self.selectKoreanInputSourceIfAvailable()
+            }
             guard let focusedElement else {
+                handOffToKorean()
                 if delimiter == "\r" { self.postKey(36, source: source) }
                 return
             }
+            var handedOff = false
             // 이벤트 게시와 실제 입력창 반영은 시점이 다르므로 표시를 확인한 뒤 전환한다.
             for _ in 0..<10 {
                 try? await Task.sleep(nanoseconds: 20_000_000)
@@ -1196,9 +1206,11 @@ final class KoreanTypoCorrector {
                     } else {
                         self.selectKoreanInputSourceIfAvailable()
                     }
+                    handedOff = true
                     break
                 }
             }
+            if !handedOff { handOffToKorean() }
             if delimiter == "\r",
                self.isEnabled, self.lastKeystrokeAt == keystrokeAt,
                NSWorkspace.shared.frontmostApplication?.processIdentifier == applicationPID,
