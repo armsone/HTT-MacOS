@@ -682,7 +682,12 @@ async function captureNow(tab, calibration, epoch, ticket) {
   // 캡처하는 사이 탭이 바뀌었거나 다른 페이지로 이동했으면 버린다.
   await assertCaptureTab(tab).catch(() => { throw codedError("stale", ""); });
   if (cancelled()) throw codedError("cancelled", "");
-  if (typeof dataUrl !== "string" || !/^data:image\/(png|jpeg);base64,/.test(dataUrl)) throw codedError("capture_failed", "캡처에 실패했습니다.");
+  if (typeof dataUrl !== "string" || !/^data:image\/(png|jpeg);base64,/.test(dataUrl)) {
+    const detail = typeof dataUrl === "string" && dataUrl.startsWith("data:")
+      ? ` (${dataUrl.slice(0, dataUrl.indexOf(",") !== -1 ? Math.min(64, dataUrl.indexOf(",")) : 64)})`
+      : "";
+    throw codedError("capture_failed", `캡처 형식 오류: ${typeof dataUrl}${detail}`);
+  }
   if (dataUrl.length > 15 * 1024 * 1024) throw codedError("image_too_large", "캡처 이미지가 너무 큽니다. 창을 줄여 주세요.");
   const id = native.nextId("cap");
   captures.set(tab.id, { id, dataUrl, url: tab.url, time: Date.now(), calibration });

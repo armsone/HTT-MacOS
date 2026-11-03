@@ -1685,9 +1685,9 @@
       };
       const w = clip.r - clip.x;
       const h = clip.b - clip.y;
-      // 묶음은 화면보다 길 수 있으므로 보이는 비율을 화면 높이까지만 따진다.
-      const fullH = strip ? Math.min(rect.height, innerHeight) : rect.height;
-      if (w < 60 || h < 30 || w * h < rect.width * fullH * 0.3) continue;
+      // 긴 이미지나 묶음은 화면보다 클 수 있으므로 화면 크기로 제한한 기준 크기 대비 보이는 비율을 따진다.
+      const candidateArea = Math.min(rect.width, innerWidth) * Math.min(rect.height, innerHeight);
+      if (w < 60 || h < 30 || w * h < candidateArea * 0.3) continue;
       // 묶음 조각은 imageStrip이 이미 확인했다.
       if (!strip && img.closest(SKIP_SELECTOR)) continue;
       // 미리 불러 둔 다음 장처럼 투명하게 겹쳐 둔 이미지는 캡처에 그 위 다른 그림이 찍히므로 고르지 않는다.
