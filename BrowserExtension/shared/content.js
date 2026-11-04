@@ -605,10 +605,16 @@
   const FONT_SPAN_CLASS = "smt-translator-font";
   const fontSpans = new Map(); // Text 노드 → 감싼 span
 
+  function isLinkNode(node) {
+    const parent = node.parentElement;
+    return !!(parent && parent.closest("a, [role='link']"));
+  }
+
   function ensureFontSpan(node) {
     let span = fontSpans.get(node);
     if (span && span.isConnected && span.parentNode && node.parentNode === span) return span;
     if (span) fontSpans.delete(node);
+    if (isLinkNode(node)) return null;
     const parent = node.parentNode;
     if (!parent) return null;
     span = document.createElement("span");
@@ -630,7 +636,7 @@
 
   /** 번역된 텍스트 노드 하나에 선택한 글꼴을 적용(또는 자동이면 원래 글꼴로 되돌림)한다. */
   function applyNodeFont(node, style) {
-    if (style === "auto" || !FONT_STYLES.includes(style)) {
+    if (style === "auto" || !FONT_STYLES.includes(style) || isLinkNode(node)) {
       removeFontSpan(node);
       return;
     }
