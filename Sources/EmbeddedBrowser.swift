@@ -16,12 +16,6 @@ enum EmbeddedBrowser {
 
     /// '브라우저 열기'
     static func open() {
-        // 이미 실행 중이면 그대로 앞으로 가져온다(같은 앱 식별자).
-        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
-            .first(where: { !$0.isTerminated }) {
-            running.activate(options: [.activateAllWindows])
-            return
-        }
         let url = appURL
         Task {
             // 서명 검사는 시간이 걸릴 수 있어 화면을 멈추지 않도록 따로 처리한다.

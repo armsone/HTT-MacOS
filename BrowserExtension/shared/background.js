@@ -278,6 +278,19 @@ const native = {
         reject(codedError("native_unavailable", text));
       };
       if (IS_SAFARI_TRANSPORT) {
+        if (IS_HTD && message.type === "translate" && message.progress && onProgress) {
+          const poll = async () => {
+            if (!this.pending.has(id)) return;
+            try {
+              const frame = await api.runtime.sendNativeMessage(SAFARI_APP_ID, { type: "htdTranslationProgress", id });
+              if (this.pending.has(id) && Array.isArray(frame?.items) && frame.items.length) {
+                this.receive({ type: "progress", phase: "partial", id, items: frame.items });
+              }
+            } catch { /* The final response remains authoritative. */ }
+            if (this.pending.has(id)) setTimeout(poll, 200);
+          };
+          setTimeout(poll, 200);
+        }
         Promise.resolve(api.runtime.sendNativeMessage(SAFARI_APP_ID, message)).then(
           (response) => this.receive(response && typeof response === "object" ? response : { id, ok: false, code: "no_response", message: describeNativeFailure() }),
           failSend
@@ -1576,7 +1589,7 @@ async function handlePopup(message) {
       externalPages.delete(tabId);
       dropDeadline(tabId);
       let epoch = control.epoch;
-      const wantAuto = message.automatic === true; // HTD: 번역 버튼 이후 원문 보기·앱 종료까지 이번 실행 동안 유지(session)
+      const wantAuto = message.automatic === true;
       const outcome = await serially(async () => {
         if (epoch !== control.epoch) return "superseded";
         const granted = wantAuto && (await hasGlobalGrant());

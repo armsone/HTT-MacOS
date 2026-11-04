@@ -515,6 +515,7 @@ async function refresh() {
     showError(error.message);
   }
   renderFx();
+  refreshAutoShorts();
 }
 
 $("agree").addEventListener("click", async () => {
@@ -539,9 +540,28 @@ $("langPack").addEventListener("click", async () => {
   }
 });
 
+function refreshAutoShorts() {
+  if (!IS_SAFARI_TRANSPORT) {
+    const row = $("autoShortsRow") || $("autoShorts")?.closest("label");
+    if (row) row.hidden = false;
+    try {
+      api?.storage?.local?.get({ autoShortsEnabled: true }, (res) => {
+        const el = $("autoShorts");
+        if (el && res) el.checked = !!res.autoShortsEnabled;
+      });
+    } catch {}
+  }
+}
+
 $("fontStyle").addEventListener("change", async (event) => {
   await call({ cmd: "setFontStyle", fontStyle: event.target.value }).catch((e) => showError(e.message));
   refresh();
+});
+
+$("autoShorts")?.addEventListener("change", (event) => {
+  try {
+    api?.storage?.local?.set({ autoShortsEnabled: event.target.checked });
+  } catch {}
 });
 
 // 번역 보기 동작(버튼 클릭·툴바 아이콘 클릭으로 팝업이 열릴 때 둘 다 이 함수 하나만 쓴다).
@@ -570,6 +590,8 @@ async function runTranslate(gesture, clickedAt) {
     const response = await call({ cmd: "translateNow", automatic: granted, clickedAt, trigger: gesture ? "button" : "open" });
     if (response.superseded) {
       notice = "원문 보기가 먼저 처리되어 번역을 시작하지 않았습니다.";
+    } else if (IS_HTD) {
+      notice = response.restricted ? "이 페이지는 번역할 수 없습니다." : "";
     } else if (!response.automatic) {
       notice = response.restricted
         ? "모든 웹사이트 접근이 허용되지 않아 자동 번역은 꺼져 있고, 이 페이지는 브라우저 정책상 번역할 수 없습니다."

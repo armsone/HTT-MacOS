@@ -14,6 +14,14 @@
   },
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "permissions": ["storage", "activeTab", "scripting", "nativeMessaging"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["autoshorts.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
   "host_permissions": [
     "https://api.exchangerate.dev/*",
     "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/*",

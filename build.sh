@@ -115,7 +115,8 @@ stage_extension() {
   local dest="$1" manifest="$2"
   mkdir -p "$dest/icons" "$dest/fonts" "$dest/provider-logos"
   cp "$BROWSER_DIR/shared/fx.js" "$BROWSER_DIR/shared/background.js" "$BROWSER_DIR/shared/content.js" \
-     "$BROWSER_DIR/shared/popup.html" "$BROWSER_DIR/shared/popup.js" "$BROWSER_DIR/shared/popup.css" "$dest/"
+     "$BROWSER_DIR/shared/popup.html" "$BROWSER_DIR/shared/popup.js" "$BROWSER_DIR/shared/popup.css" \
+     "$BROWSER_DIR/shared/autoshorts.js" "$dest/"
   # WKWebExtension은 외부 JS를 한국어 로케일에서 레거시 문자셋으로 읽어 한글이 깨지고 정규식이 오류를 낼 수 있다.
   # 복사본 JS의 비ASCII 문자만 \uXXXX(UTF-16)로 바꿔 인코딩과 무관하게 같은 의미로 읽히게 한다. 원본은 UTF-8 그대로다.
   python3 -I - "$dest/fx.js" "$dest/background.js" "$dest/content.js" "$dest/popup.js" <<'PY'

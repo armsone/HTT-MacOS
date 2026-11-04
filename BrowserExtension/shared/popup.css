@@ -145,3 +145,4 @@ button:disabled { opacity: .5; cursor: default; }
 /* 언어·글꼴: 한 줄에 라벨+선택 두 쌍 */
 .settings { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 2px; }
 .setting { display: flex; align-items: center; gap: 3px; font-size: 11px; white-space: nowrap; }
+.setting[hidden] { display: none; }
