@@ -1,11 +1,11 @@
-# HTT (Hanstree Translation & Touch Tools) v1.8.5
+# HTT (Hanstree Translation & Touch Tools) v1.8.6
 
 - **소스**: [github.com/armsone/HTT-MacOS](https://github.com/armsone/HTT-MacOS) (공개)
 - **다운로드(DMG)**: [최신 릴리스](https://github.com/armsone/HTT-MacOS/releases/latest)
   — Developer ID 서명 및 Apple 공증(notarization)을 거친 Apple Silicon(arm64) 전용 빌드입니다.
 - **요구 사항**: macOS 15.4 이상, Apple Silicon(arm64) Mac. Intel(x86_64)은 지원하지 않습니다.
 
-### 1.8.5 변경 사항
+### 1.8.6 변경 사항
 
 - **하나 내부 우측 패널 및 독립 너비 조절**: 상단 '하나' 스위치로 내부 우측 패널을 여닫을 수 있으며 드래그로 너비를 독립 조절합니다 (놀이터 로그인이 필요합니다).
 - **주소창 명령어 및 좌측 페이지 주소 복원**: 주소창에서 `하나`, `새대화`, `하나 새창`, `브리핑` 명령을 지원하며, 좌측 페이지 주소 표시가 복원되었습니다. '하나 새창'은 별도 하나 전용 앱이 설치되어 있어야 합니다.
