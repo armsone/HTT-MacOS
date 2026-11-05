@@ -164,7 +164,15 @@ private let htdBundleID = "com.hanstree.HttpsDown"
 /// 이 도우미 자신의 실제 실행 경로(커널이 알려 주는 경로). 호출자 입력·argv에 의존하지 않는다.
 private func ownExecutablePath() -> String? {
     guard let path = parentProcessPath(for: getpid()), !path.isEmpty else { return nil }
-    return URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    return kernelRealPath(path)
+}
+
+/// realpath(3)로 심볼릭 링크를 푼다. Foundation의 resolvingSymlinksInPath()는 /private/tmp를 /tmp로 바꿔
+/// 커널이 알려 주는 프로세스 경로(/private/…)와 어긋나므로 경로 비교에는 쓰지 않는다.
+private func kernelRealPath(_ path: String) -> String? {
+    guard let resolved = realpath(path, nil) else { return nil }
+    defer { free(resolved) }
+    return String(cString: resolved)
 }
 
 private func requirementCheck(_ text: String, code: SecStaticCode) -> Bool {
@@ -198,9 +206,9 @@ private func verifyEmbeddedHTDParent(ppid: pid_t) -> Bool {
 
     // 3) 부모 실행 파일 경로는 바깥 번들 안의 정확한 HTD 경로(심볼릭 링크 없음)여야 한다.
     let expectedPath = outerURL.appendingPathComponent("Contents/Helpers/HTD.app/Contents/MacOS/HTD").path
-    guard URL(fileURLWithPath: expectedPath).resolvingSymlinksInPath().path == expectedPath,
+    guard kernelRealPath(expectedPath) == expectedPath,
           let rawParent = parentProcessPath(for: ppid),
-          URL(fileURLWithPath: rawParent).resolvingSymlinksInPath().path == expectedPath,
+          kernelRealPath(rawParent) == expectedPath,
           rawParent == expectedPath else { return false }
     let htdAppURL = outerURL.appendingPathComponent("Contents/Helpers/HTD.app", isDirectory: true)
     guard Bundle(url: htdAppURL)?.bundleIdentifier == htdBundleID else { return false }
