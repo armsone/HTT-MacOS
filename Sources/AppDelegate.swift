@@ -76,6 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             viewModel.status = .error(browserHotKey.statusDescription)
         }
 
+        // 보조키 더블탭(Command 2회 또는 Shift 2회) 브라우저 호출 감시 시작
+        BrowserDoubleTapShortcut.shared.start()
+
         // 메일 번역: Mail › 서비스 메뉴, Mail 위 번역 버튼(기본 켜짐)
         MailWindowCoordinator.shared.start()
 
@@ -128,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        BrowserDoubleTapShortcut.shared.stop()
         MailWindowCoordinator.shared.prepareForTermination()
         InputMateCoordinator.shared.stop()
         BTNIntegration.shared.stop()

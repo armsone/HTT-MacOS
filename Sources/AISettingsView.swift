@@ -18,6 +18,7 @@ struct AISettingsView: View {
     @State private var loginStatus = ""
     @State private var loginNeedsApproval = false
     @ObservedObject private var appearance = HTTAppearanceStore.shared
+    @ObservedObject private var doubleTapShortcut = BrowserDoubleTapShortcut.shared
 
     var body: some View {
         Form {
@@ -81,6 +82,42 @@ struct AISettingsView: View {
                 Text("Mail 연동")
             } footer: {
                 Text("Mail에서 선택한 메일을 번역하는 버튼입니다.")
+            }
+
+            Section {
+                HStack {
+                    Text("두 번 누를 키")
+                    Spacer()
+                    Picker("", selection: $doubleTapShortcut.selectedModifier) {
+                        ForEach(BrowserDoubleTapModifier.allCases) { modifier in
+                            Text(modifier.displayName).tag(modifier)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 170)
+                }
+
+                if doubleTapShortcut.selectedModifier != .off && !doubleTapShortcut.isAccessibilityTrusted {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text("다른 앱 실행 중 전역 키 감지에는 손쉬운 사용 권한이 필요합니다. 권한이 없으면 HTT 앱 외부에서의 두 번 누름이 동작하지 않을 수 있습니다.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        Button("손쉬운 사용 권한 설정 열기…") {
+                            InputMateCoordinator.shared.appState.requestAccessibilityAndRetry()
+                            doubleTapShortcut.updateAccessibilityStatus()
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(.vertical, 2)
+                }
+            } header: {
+                Text("브라우저 호출 단축키")
+            } footer: {
+                Text("기존 조합 단축키(⇧⌃⌥⌘B)는 그대로 유지되며, Command 키 또는 Shift 키를 짧게 두 번 눌러 HTD 브라우저를 빠르게 앞으로 가져올 수 있습니다. 원하는 경우 기본 설정을 변경할 수 있습니다.")
             }
 
             Section {
@@ -244,6 +281,7 @@ struct AISettingsView: View {
         .onAppear {
             mailButtonEnabled = MailToolbarButton.shared.isEnabled
             refreshLoginStatus()
+            doubleTapShortcut.updateAccessibilityStatus()
             if TranslationBackend.externalOptionsVisible { accounts.refreshAll() }
         }
     }
