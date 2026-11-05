@@ -32,6 +32,11 @@ if [ ! -f "$ROOT_DIR/Resources/AppIcon.icns" ] || [ "$ROOT_DIR/Resources/AppIcon
   "$ROOT_DIR/scripts/make-icon.sh"
 fi
 
+if [ ! -f "$ROOT_DIR/Sources/CleanUSB/USBContentView.swift" ]; then
+  echo "오류: HTT에 필요한 USB 정리·추출 소스가 없습니다." >&2
+  exit 1
+fi
+
 echo "==> 빌드 디렉터리 정리"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources" "$APP_BUNDLE/Contents/Frameworks"
@@ -49,6 +54,7 @@ SWIFT_SOURCES=(
   "$ROOT_DIR"/Sources/InputMateCore/*.swift
   "$ROOT_DIR"/Sources/BTN/*.swift
   "$ROOT_DIR"/Sources/BTNCore/*.swift
+  "$ROOT_DIR"/Sources/CleanUSB/*.swift
 )
 
 echo "==> Swift 소스 컴파일 (target: $SWIFT_TARGET)"

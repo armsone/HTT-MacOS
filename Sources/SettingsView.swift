@@ -9,6 +9,8 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
     case browser
     case input
     case macManagement
+    case macManagementSettings
+    case cleanUSB
     case help
     case general
 
@@ -21,7 +23,9 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
         case .screen: return "화면 번역"
         case .browser: return "브라우저 번역"
         case .input: return "입력 도우미"
-        case .macManagement: return "Mac 관리"
+        case .macManagement: return "Mac 상태·정리"
+        case .macManagementSettings: return "Mac 관리 설정"
+        case .cleanUSB: return "USB 정리·추출"
         case .help: return "사용 방법"
         case .general: return "앱 설정"
         }
@@ -34,18 +38,21 @@ public enum SettingsSection: Hashable, CaseIterable, Identifiable {
         case .screen: return "screen"
         case .browser: return "browser"
         case .input: return "edit"
-        case .macManagement: return "device_files"
+        case .macManagement, .cleanUSB: return "device_files"
+        case .macManagementSettings: return "settings"
         case .help: return "help"
         case .general: return "settings"
         }
     }
 
-    /// 사이드바의 첫 묶음(작업 목적별 기능). 나머지는 안내·설정 묶음.
-    static let taskSections: [SettingsSection] = [.home, .mail, .screen, .browser, .input, .macManagement]
+    /// 사이드바 카테고리 묶음
+    static let overviewSections: [SettingsSection] = [.home]
+    static let translationSections: [SettingsSection] = [.mail, .screen, .browser]
     static let supportSections: [SettingsSection] = [.help, .general]
+
 }
 
-/// 입력 도우미의 하위 메뉴. 사이드바의 "입력 도우미" 아래에 펼쳐지고, 선택한 페이지가 같은 상세 영역에 나타난다.
+/// 입력 도우미의 하위 메뉴. 사이드바의 "입력 도우미" 아래에 항상 표시되고, 선택한 페이지가 같은 상세 영역에 나타난다.
 public enum InputMatePage: Int, CaseIterable, Identifiable {
     case appLanguage
     case koreanTypo
@@ -82,21 +89,6 @@ private enum SidebarItem: Hashable {
     case inputPage(InputMatePage)
 }
 
-/// Mac 관리 섹션 안에서 바로 전환하는 두 구간(별도 창 없이 같은 상세 영역을 바꾼다).
-public enum MacManagementSegment: String, CaseIterable, Identifiable {
-    case status
-    case settings
-
-    public var id: String { rawValue }
-
-    public var title: String {
-        switch self {
-        case .status: return "상태·정리"
-        case .settings: return "설정"
-        }
-    }
-}
-
 /// 메인 창의 현재 섹션과 작업 영역 상태를 보존한다. 창이 열려 있는 동안 메뉴·버튼·서비스 어디서 요청해도 같은 창에서 섹션만 바뀐다.
 @MainActor
 public final class SettingsSectionStore: ObservableObject {
@@ -104,8 +96,6 @@ public final class SettingsSectionStore: ObservableObject {
 
     @Published public var section: SettingsSection = .home {
         didSet {
-            // 홈·안내·메뉴 어디서 입력 도우미를 열어도 사이드바 하위 메뉴가 펼쳐져 선택한 페이지가 보인다.
-            if section == .input { inputGroupExpanded = true }
             // 사용자가 다른 섹션으로 이동하면 열려 있던 브라우저 화면은 배너로 접고, 돌아가기로 다시 볼 수 있다.
             if section != oldValue {
                 showsHostedBrowser = false
@@ -117,10 +107,10 @@ public final class SettingsSectionStore: ObservableObject {
     var onSectionChanged: (() -> Void)?
     /// 창이 처음 만들어지기 전의 요청도 보존하며, 시트를 닫으면 바인딩이 다시 false로 바뀐다.
     @Published public var showLanguagePackSheet = false
-    @Published public var macSegment: MacManagementSegment = .status
+    /// USB 정리·추출 상태를 메인 액터에 유지하여 섹션 이동 간 작업을 보존한다.
+    lazy var cleanUSBState = AppState()
     /// 입력 도우미 하위 페이지. 다른 섹션으로 갔다 돌아와도 유지된다.
     @Published public var inputPage: InputMatePage = .appLanguage
-    @Published public var inputGroupExpanded = false
     /// 메인 창 안에 올린 AI·웹 번역·로그인 브라우저 화면(여러 개면 마지막이 대표).
     @Published var hostedBrowsers: [AIBIBrowserWindow] = []
     @Published var showsHostedBrowser = false
@@ -131,7 +121,6 @@ public final class SettingsSectionStore: ObservableObject {
 
     public init(section: SettingsSection = .home) {
         self.section = section
-        self.inputGroupExpanded = (section == .input)
     }
 }
 
@@ -171,8 +160,7 @@ public struct SettingsView: View {
         VStack(spacing: 0) {
             List(selection: Binding<SidebarItem?>(
                 get: {
-                    // 펼쳐진 입력 도우미에서는 하위 항목만 선택 표시되어 부모·자식이 동시에 선택돼 보이지 않는다.
-                    if store.section == .input && store.inputGroupExpanded { return .inputPage(store.inputPage) }
+                    if store.section == .input { return .inputPage(store.inputPage) }
                     return .section(store.section)
                 },
                 set: { newItem in
@@ -187,16 +175,25 @@ public struct SettingsView: View {
                     }
                 }
             )) {
-                Section {
-                    ForEach(SettingsSection.taskSections) { section in
-                        if section == .input {
-                            inputGroupRow
-                        } else {
-                            sidebarRow(section)
-                        }
+                Section("개요") {
+                    ForEach(SettingsSection.overviewSections) { sidebarRow($0) }
+                }
+                Section("번역") {
+                    ForEach(SettingsSection.translationSections) { sidebarRow($0) }
+                }
+                Section(SettingsSection.input.title) {
+                    ForEach(InputMatePage.allCases) { page in
+                        Label(page.title, systemImage: page.symbolName)
+                            .font(.body)
+                            .tag(SidebarItem.inputPage(page))
                     }
                 }
-                Section {
+                Section("도구") {
+                    sidebarRow(.macManagement)
+                    sidebarRow(.macManagementSettings)
+                    sidebarRow(.cleanUSB)
+                }
+                Section("지원 및 설정") {
                     ForEach(SettingsSection.supportSections) { sidebarRow($0) }
                 }
             }
@@ -229,33 +226,9 @@ public struct SettingsView: View {
         .tag(SidebarItem.section(section))
     }
 
-    /// 입력 도우미: 라벨을 누르면 열리며 펼치고, 공개 삼각형으로 접을 수 있다. 하위 4개 페이지가 바로 아래에 보인다.
-    private var inputGroupRow: some View {
-        DisclosureGroup(isExpanded: $store.inputGroupExpanded) {
-            ForEach(InputMatePage.allCases) { page in
-                Label(page.title, systemImage: page.symbolName)
-                    .font(.body)
-                    .tag(SidebarItem.inputPage(page))
-            }
-        } label: {
-            Label {
-                Text(SettingsSection.input.title)
-                    .font(.body)
-            } icon: {
-                HTTIconView(id: SettingsSection.input.iconId, size: 18)
-            }
-            .tag(SidebarItem.section(.input))
-            .contentShape(Rectangle())
-            .onTapGesture {
-                store.inputGroupExpanded = true
-                select(.input)
-            }
-        }
-    }
-
     /// 사이드바 선택: Mac 관리는 표시 직전에 충돌 상태를 새로 확인한다(별도 창 없음).
     private func select(_ section: SettingsSection) {
-        if section == .macManagement { BTNIntegration.shared.prepareForDisplay() }
+        if section == .macManagement || section == .macManagementSettings { BTNIntegration.shared.prepareForDisplay() }
         store.section = section
     }
 
@@ -345,8 +318,11 @@ public struct SettingsView: View {
             BrowserSetupView(settingsStore: store)
         case .input:
             InputMateSettingsView(page: store.inputPage)
-        case .macManagement:
+        case .macManagement, .macManagementSettings:
             MacManagementPane(store: store)
+        case .cleanUSB:
+            CleanUSBPane()
+                .environmentObject(store.cleanUSBState)
         case .help:
             HTTGuideView(settingsStore: store)
         case .general:
@@ -386,7 +362,7 @@ private struct OpaqueCover: ViewModifier {
     }
 }
 
-// MARK: - Mac 관리 (상태·정리 / 설정을 같은 영역에서 전환)
+// MARK: - Mac 관리
 
 private struct MacManagementPane: View {
     @ObservedObject var store: SettingsSectionStore
@@ -402,21 +378,14 @@ private struct MacManagementPane: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
-                Picker("Mac 관리 구간", selection: $store.macSegment) {
-                    ForEach(MacManagementSegment.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 190)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             Divider()
-            switch store.macSegment {
-            case .status:
+            if store.section == .macManagement {
                 DetailView(model: integration.model)
-            case .settings:
-                BTNSettingsView(integration: integration, onShowStatus: { store.macSegment = .status })
+            } else {
+                BTNSettingsView(integration: integration, onShowStatus: { store.section = .macManagement })
             }
         }
         .onAppear { integration.prepareForDisplay() }

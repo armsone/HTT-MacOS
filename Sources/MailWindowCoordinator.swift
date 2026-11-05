@@ -60,15 +60,14 @@ final class MailWindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     /// 메인 창을 원하는 섹션으로 연다. 이미 열려 있으면 같은 창을 앞으로 가져오고 섹션만 바꾼다.
-    func showWorkbench(section: SettingsSection = .home, macSegment: MacManagementSegment? = nil) {
+    func showWorkbench(section: SettingsSection = .home) {
         // 명시적 이동: 잠시 내려 둔 캡처가 있으면 포기(진행 중 화면 번역 취소)하고, 떠 있는 캡처 영역도 먼저 닫는다.
         // 작업 창과 캡처 영역이 겹쳐 보이지 않게, 작업 창을 보이기 전에 캡처 영역을 먼저 닫는다.
         abandonSuspendedCapture()
         dismissCaptureOverlayIfNeeded()
         store.showsHostedBrowser = false
         store.section = section
-        if let macSegment { store.macSegment = macSegment }
-        if section == .macManagement { BTNIntegration.shared.prepareForDisplay() }
+        if section == .macManagement || section == .macManagementSettings { BTNIntegration.shared.prepareForDisplay() }
         presentWorkbenchWindow()
     }
 

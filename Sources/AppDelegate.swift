@@ -269,6 +269,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // MARK: Mac 관리 (HTT 창 안의 Mac 관리 섹션)
         menu.addItem(item("Mac 상태·정리 항목", #selector(showMacManagement), symbol: "cpu"))
         menu.addItem(item("Mac 관리 설정", #selector(showMacManagementSettings), symbol: "slider.horizontal.3"))
+        menu.addItem(item("USB 정리·추출", #selector(showCleanUSB), symbol: "externaldrive"))
 
         menu.addItem(.separator())
 
@@ -439,11 +440,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showMacManagement() {
-        MailWindowCoordinator.shared.showWorkbench(section: .macManagement, macSegment: .status)
+        MailWindowCoordinator.shared.showWorkbench(section: .macManagement)
     }
 
     @objc private func showMacManagementSettings() {
-        MailWindowCoordinator.shared.showWorkbench(section: .macManagement, macSegment: .settings)
+        MailWindowCoordinator.shared.showWorkbench(section: .macManagementSettings)
+    }
+
+    @objc private func showCleanUSB() {
+        MailWindowCoordinator.shared.showWorkbench(section: .cleanUSB)
     }
 
     @objc private func toggleInputMateEnabled() {
@@ -496,6 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenu.addItem(item("업데이트 확인…", #selector(checkForUpdates)))
         appMenu.addItem(.separator())
         appMenu.addItem(item("Mac 상태·정리 항목", #selector(showMacManagement)))
+        appMenu.addItem(item("USB 정리·추출", #selector(showCleanUSB)))
         let settings = NSMenuItem(title: "앱 설정", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
         appMenu.addItem(settings)

@@ -25,6 +25,15 @@ public struct HTTHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 glanceHeroBanner
+                Button {
+                    settingsStore.section = .cleanUSB
+                } label: {
+                    Label("USB 정리·추출", systemImage: "externaldrive")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
+
                 serviceStatusGrid
                 quickAccessSection
             }
@@ -344,15 +353,13 @@ public struct HTTHomeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Button("Mac 상태·정리 항목 보기") {
-                            settingsStore.macSegment = .status
                             settingsStore.section = .macManagement
                         }
                     }
                     HStack {
                         Spacer()
                         Button("Mac 관리 설정") {
-                            settingsStore.macSegment = .settings
-                            settingsStore.section = .macManagement
+                            settingsStore.section = .macManagementSettings
                         }
                         .buttonStyle(.link)
                     }
