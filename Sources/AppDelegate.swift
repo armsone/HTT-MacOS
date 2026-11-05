@@ -119,7 +119,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// .eml·이미지 파일 열기(Finder '다음으로 열기', Dock 아이콘으로 끌어놓기)
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard let url = urls.first else { return }
+        // http/https 주소는 HTT 안의 브라우저로 넘기고, 파일 열기는 기존 동작을 그대로 유지한다.
+        let webURLs = EmbeddedBrowser.forwardableWebURLs(urls)
+        if !webURLs.isEmpty { EmbeddedBrowser.open(urls: webURLs) }
+        guard let url = urls.first(where: { $0.isFileURL }) else { return }
         AppModel.shared.open(url: url)
         AppModel.shared.showMainWindow()
     }
