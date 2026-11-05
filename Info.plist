@@ -45,7 +45,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.8.0</string>
+	<string>1.8.1</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -61,7 +61,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>202611051837</string>
+	<string>202611052024</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
